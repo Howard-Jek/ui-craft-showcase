@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EchoNote — Talk like a mess. Read like a memo.</title>
+<meta name="description" content="EchoNote turns your rambling voice memos into clean, searchable notes — summary, action items, and tags — in about eight seconds." />
+<meta name="color-scheme" content="dark" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+<style>
+/* ============================== TOKENS ============================== */
+:root{
+  /* color — roles, not hexes scattered around */
+  --bg:#0B0C0F;
+  --surface:#131519;
+  --surface-raised:#1B1E24;
+  --surface-quiet:#0F1114;
+  --border:#2A2E37;
+  --border-strong:#3A404B;
+  --text:#F5F2EC;
+  --text-secondary:#C4BFB6;
+  --text-muted:#9A958C;
+  --signal:#FF8A4C;          /* the one accent — the live voice signal */
+  --signal-hover:#FF7A33;
+  --signal-soft:rgba(255,138,76,.14);
+  --signal-fg:#1A0E05;       /* ink on the amber button */
+  --clarity:#7FE3C6;         /* structured-state marker, used sparingly */
+  --clarity-soft:rgba(127,227,198,.13);
+  --danger:#FF6B6B;
+
+  /* spacing scale (8px base) */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px;
+  --s7:48px; --s8:64px; --s9:96px; --s10:128px;
+
+  /* radii */
+  --r-sm:8px; --r-md:12px; --r-lg:20px; --r-full:999px;
+
+  /* type */
+  --f-display:"Fraunces",Georgia,serif;
+  --f-body:"Hanken Grotesk",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,monospace;
+
+  /* elevation — hairline borders are the primary language; shadow is a whisper */
+  --shadow-sm:0 1px 2px rgba(0,0,0,.35);
+  --shadow-md:0 12px 40px rgba(0,0,0,.45);
+  --glow:0 0 0 1px rgba(255,138,76,.35), 0 10px 40px -8px rgba(255,138,76,.35);
+
+  --container:1200px;
+  --ease:cubic-bezier(.2,0,0,1);
+  --z-header:1100;
+}
+
+/* ============================== RESET ============================== */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.6;
+  font-weight:400;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  overflow-x:clip;
+}
+h1,h2,h3,h4,p,figure,ul,ol{margin:0}
+ul{list-style:none;padding:0}
+a{color:inherit;text-decoration:none}
+img,canvas,svg{display:block;max-width:100%}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--signal);outline-offset:3px;border-radius:4px}
+::selection{background:var(--signal);color:var(--signal-fg)}
+::-webkit-scrollbar{width:12px;height:12px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:99px;border:3px solid var(--bg)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+/* ============================== LAYOUT ============================== */
+.container{width:100%;max-width:var(--container);margin-inline:auto;padding-inline:var(--s5)}
+section{position:relative}
+.eyebrow{
+  font-family:var(--f-mono);font-size:12px;font-weight:500;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--signal);
+  display:inline-flex;align-items:center;gap:var(--s2);
+}
+.eyebrow::before{content:"";width:22px;height:1px;background:var(--signal);opacity:.7}
+.h-lead{font-family:var(--f-display);font-weight:500;line-height:1.05;letter-spacing:-.02em}
+.section-head{max-width:640px;margin-bottom:var(--s7)}
+.section-head h2{font-family:var(--f-display);font-weight:500;font-size:clamp(30px,4.4vw,46px);line-height:1.08;letter-spacing:-.02em;margin-top:var(--s4)}
+.section-head p{color:var(--text-secondary);font-size:19px;margin-top:var(--s4);max-width:56ch}
+
+/* ============================== BUTTONS ============================== */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:var(--s2);
+  height:52px;padding:0 var(--s5);border-radius:var(--r-md);
+  font-weight:600;font-size:16px;border:1px solid transparent;
+  transition:transform .18s var(--ease),background .18s var(--ease),border-color .18s var(--ease),box-shadow .18s var(--ease),color .18s var(--ease);
+  white-space:nowrap;
+}
+.btn-primary{background:var(--signal);color:var(--signal-fg);box-shadow:0 8px 24px -10px rgba(255,138,76,.7)}
+.btn-primary:hover{background:var(--signal-hover);transform:translateY(-2px);box-shadow:0 14px 30px -10px rgba(255,138,76,.8)}
+.btn-primary:active{transform:translateY(0)}
+.btn-ghost{background:transparent;color:var(--text);border-color:var(--border-strong)}
+.btn-ghost:hover{border-color:var(--text-muted);background:var(--surface);transform:translateY(-2px)}
+.btn-ghost:active{transform:translateY(0)}
+.btn:disabled{opacity:.55;cursor:not-allowed;transform:none}
+.btn-sm{height:44px;padding:0 var(--s4);font-size:15px;border-radius:var(--r-sm)}
+
+/* ============================== HEADER ============================== */
+.site-header{
+  position:sticky;top:0;z-index:var(--z-header);
+  border-bottom:1px solid transparent;transition:border-color .3s var(--ease),background .3s var(--ease),backdrop-filter .3s var(--ease);
+}
+.site-header.scrolled{background:rgba(11,12,15,.72);backdrop-filter:blur(14px) saturate(1.4);border-bottom-color:var(--border)}
+.nav{display:flex;align-items:center;justify-content:space-between;height:74px}
+.brand{display:inline-flex;align-items:center;gap:10px;font-family:var(--f-display);font-weight:600;font-size:20px;letter-spacing:-.01em;min-height:44px;padding-block:6px}
+.brand .mark{width:26px;height:26px;flex:none}
+.nav-links{display:flex;align-items:center;gap:var(--s6)}
+.nav-links a.navlink{color:var(--text-secondary);font-weight:500;font-size:15px;transition:color .18s var(--ease);position:relative;padding:6px 0}
+.nav-links a.navlink:hover{color:var(--text)}
+.nav-links a.navlink::after{content:"";position:absolute;left:0;right:100%;bottom:0;height:1.5px;background:var(--signal);transition:right .25s var(--ease)}
+.nav-links a.navlink:hover::after{right:0}
+.nav-cta{display:flex;align-items:center;gap:var(--s4)}
+.nav-cta .navlink{color:var(--text-secondary);font-weight:500;font-size:15px}
+.nav-cta .navlink:hover{color:var(--text)}
+.menu-btn{display:none;width:44px;height:44px;align-items:center;justify-content:center;background:transparent;border:1px solid var(--border-strong);border-radius:var(--r-sm);color:var(--text)}
+.menu-btn:hover{border-color:var(--text-muted);background:var(--surface)}
+.navlink-mobile{display:none}
+
+/* ============================== HERO ============================== */
+.hero{padding-top:var(--s9);padding-bottom:var(--s9);overflow:hidden}
+.hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:var(--s8);align-items:center}
+.hero-copy h1{
+  font-family:var(--f-display);font-weight:500;
+  font-size:clamp(42px,6.4vw,74px);line-height:1.0;letter-spacing:-.03em;
+  margin-top:var(--s5);
+}
+.hero-copy h1 .accent{color:var(--signal);font-style:italic;font-weight:400}
+.hero-sub{color:var(--text-secondary);font-size:20px;line-height:1.55;margin-top:var(--s5);max-width:50ch}
+.cta-form{display:flex;gap:var(--s3);margin-top:var(--s6);max-width:480px;flex-wrap:wrap}
+.field{flex:1 1 220px;min-width:0;position:relative}
+.field input{
+  width:100%;height:52px;padding:0 var(--s4);border-radius:var(--r-md);
+  background:var(--surface);border:1px solid var(--border-strong);color:var(--text);
+  font:inherit;font-size:16px;transition:border-color .18s var(--ease),box-shadow .18s var(--ease);
+}
+.field input::placeholder{color:var(--text-muted)}
+.field input:hover{border-color:var(--text-muted)}
+.field input:focus-visible{outline:none;border-color:var(--signal);box-shadow:0 0 0 3px var(--signal-soft)}
+.field input[aria-invalid="true"]{border-color:var(--danger);box-shadow:0 0 0 3px rgba(255,107,107,.15)}
+.cta-note{margin-top:var(--s4);color:var(--text-muted);font-size:14px;display:flex;align-items:center;gap:var(--s2)}
+.cta-note svg{color:var(--clarity);flex:none}
+.form-msg{margin-top:var(--s4);font-size:15px;font-weight:500;color:var(--clarity);min-height:1px}
+.form-msg[data-err="true"]{color:var(--danger)}
+
+/* recorder panel (hero visual) */
+.panel{
+  position:relative;background:linear-gradient(180deg,var(--surface) 0%,var(--surface-quiet) 100%);
+  border:1px solid var(--border);border-radius:var(--r-lg);padding:var(--s5);
+  box-shadow:var(--shadow-md);
+}
+.panel-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s5)}
+.rec-pill{display:inline-flex;align-items:center;gap:var(--s2);font-family:var(--f-mono);font-size:12.5px;letter-spacing:.08em;color:var(--text-secondary);text-transform:uppercase}
+.rec-dot{width:9px;height:9px;border-radius:50%;background:var(--signal);box-shadow:0 0 0 0 rgba(255,138,76,.6);animation:pulse 1.8s var(--ease) infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,138,76,.55)}70%{box-shadow:0 0 0 10px rgba(255,138,76,0)}100%{box-shadow:0 0 0 0 rgba(255,138,76,0)}}
+.rec-time{font-family:var(--f-mono);font-size:13px;color:var(--text-muted);font-variant-numeric:tabular-nums}
+.wave-wrap{position:relative;height:120px;border-radius:var(--r-md);background:var(--surface-quiet);border:1px solid var(--border);overflow:hidden}
+.wave-wrap canvas{width:100%;height:100%}
+.wave-fallback{position:absolute;inset:0;display:none;align-items:center;justify-content:center;gap:4px}
+.wave-fallback i{display:block;width:4px;border-radius:99px;background:var(--signal);opacity:.85}
+.transcript{margin-top:var(--s5);font-family:var(--f-mono);font-size:13.5px;line-height:1.7;color:var(--text-secondary);min-height:72px;-webkit-mask-image:linear-gradient(90deg,#000 58%,transparent 90%);mask-image:linear-gradient(90deg,#000 58%,transparent 90%)}
+.transcript .cursor{display:inline-block;width:8px;height:1.05em;background:var(--signal);vertical-align:-2px;margin-left:2px;animation:blink 1.1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.note-chip{
+  position:absolute;right:-14px;bottom:-18px;width:min(280px,80%);
+  background:var(--surface-raised);border:1px solid var(--border-strong);border-radius:var(--r-md);
+  padding:var(--s4);box-shadow:var(--shadow-md);
+}
+.note-chip .nc-label{font-family:var(--f-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--clarity);margin-bottom:6px}
+.note-chip .nc-title{font-weight:600;font-size:15px;margin-bottom:8px}
+.note-chip .nc-row{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--text-secondary);margin-top:6px}
+.tick{width:16px;height:16px;flex:none;color:var(--clarity)}
+
+/* trust row */
+.trust{margin-top:var(--s9);display:flex;align-items:center;gap:var(--s6);flex-wrap:wrap;color:var(--text-muted);font-size:13px;font-family:var(--f-mono);letter-spacing:.04em}
+.trust span{display:inline-flex;align-items:center;gap:var(--s2)}
+.trust .divider{width:4px;height:4px;border-radius:50%;background:var(--border-strong)}
+
+/* ============================== RESOLVE (signature) ============================== */
+.resolve{padding-block:var(--s9)}
+.resolve-stage{min-height:78vh;display:grid;grid-template-columns:1fr 1fr;gap:var(--s8);align-items:center}
+.resolve-left{position:relative}
+.stage-eyebrow{margin-bottom:var(--s4)}
+.stage-title{font-family:var(--f-display);font-weight:500;font-size:clamp(28px,3.6vw,42px);line-height:1.1;letter-spacing:-.02em}
+.stage-sub{color:var(--text-secondary);margin-top:var(--s4);font-size:18px;max-width:44ch}
+.res-wave-wrap{margin-top:var(--s6);height:150px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--surface-quiet);position:relative;overflow:hidden}
+.res-wave-wrap canvas{width:100%;height:100%}
+.res-raw{margin-top:var(--s4);font-family:var(--f-mono);font-size:13px;line-height:1.7;color:var(--text-muted)}
+.progress-track{margin-top:var(--s5);height:3px;border-radius:99px;background:var(--border);overflow:hidden}
+.progress-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--signal),var(--clarity));border-radius:99px}
+.progress-label{margin-top:10px;font-family:var(--f-mono);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);display:flex;justify-content:space-between}
+
+/* the structured note that assembles */
+.note-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  padding:var(--s6);box-shadow:var(--shadow-md);
+}
+.nc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s4);padding-bottom:var(--s4);border-bottom:1px solid var(--border)}
+.nc-head h3{font-family:var(--f-display);font-weight:600;font-size:22px;letter-spacing:-.01em}
+.nc-date{font-family:var(--f-mono);font-size:12px;color:var(--text-muted);white-space:nowrap;padding-top:6px}
+.nc-summary{margin-top:var(--s4);font-size:16.5px;line-height:1.6;color:var(--text)}
+.nc-summary b{color:var(--signal);font-weight:600}
+.nc-block-label{font-family:var(--f-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);margin-top:var(--s5);margin-bottom:var(--s3)}
+.task{display:flex;gap:var(--s3);align-items:flex-start;padding:10px 0;border-top:1px solid var(--border)}
+.task:first-of-type{border-top:none}
+.task .box{width:20px;height:20px;flex:none;border-radius:6px;border:1.5px solid var(--border-strong);display:flex;align-items:center;justify-content:center;margin-top:2px;transition:background .2s var(--ease),border-color .2s var(--ease)}
+.task.done .box{background:var(--clarity);border-color:var(--clarity)}
+.task.done .box svg{color:#05231b}
+.task.done .t-text{color:var(--text-muted);text-decoration:line-through;text-decoration-color:var(--border-strong)}
+.task .box svg{width:13px;height:13px;opacity:0;transition:opacity .2s var(--ease)}
+.task.done .box svg{opacity:1}
+.t-text{font-size:15.5px;line-height:1.5}
+.t-text .who{color:var(--clarity);font-weight:600}
+.t-meta{font-family:var(--f-mono);font-size:12px;color:var(--text-muted);margin-left:auto;white-space:nowrap;padding-top:3px}
+.tag-row{display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:var(--s4)}
+.tag{font-family:var(--f-mono);font-size:12.5px;color:var(--clarity);background:var(--clarity-soft);border:1px solid rgba(127,227,198,.25);border-radius:var(--r-full);padding:5px 12px}
+
+/* ============================== FEATURES ============================== */
+.features{padding-block:var(--s9)}
+.feat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--s5)}
+.feat-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  padding:var(--s6);transition:transform .25s var(--ease),border-color .25s var(--ease),background .25s var(--ease);
+  position:relative;overflow:hidden;
+}
+.feat-card:hover{transform:translateY(-4px);border-color:var(--border-strong);background:var(--surface-raised)}
+.feat-icon{width:46px;height:46px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;background:var(--signal-soft);color:var(--signal);border:1px solid rgba(255,138,76,.25);margin-bottom:var(--s5)}
+.feat-icon svg{width:22px;height:22px}
+.feat-card h3{font-family:var(--f-display);font-weight:600;font-size:21px;letter-spacing:-.01em}
+.feat-card p{color:var(--text-secondary);margin-top:var(--s3);font-size:16px;line-height:1.6}
+
+/* ============================== HOW ============================== */
+.how{padding-block:var(--s9)}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s6);counter-reset:step}
+.step{position:relative;padding-top:var(--s6);border-top:1px solid var(--border)}
+.step .num{font-family:var(--f-mono);font-size:13px;color:var(--signal);letter-spacing:.1em}
+.step h3{font-family:var(--f-display);font-weight:600;font-size:23px;margin-top:var(--s4);letter-spacing:-.01em}
+.step p{color:var(--text-secondary);margin-top:var(--s3);font-size:16px;line-height:1.6}
+.step .bar{position:absolute;top:-1px;left:0;width:0;height:2px;background:var(--signal);transition:width .6s var(--ease)}
+.step.lit .bar{width:56px}
+
+/* ============================== STATS ============================== */
+.stats{padding-block:var(--s8)}
+.stats-inner{border:1px solid var(--border);border-radius:var(--r-lg);background:linear-gradient(180deg,var(--surface),var(--surface-quiet));padding:var(--s7);display:grid;grid-template-columns:repeat(4,1fr);gap:var(--s6)}
+.stat{text-align:left}
+.stat .n{font-family:var(--f-display);font-weight:500;font-size:clamp(32px,3.6vw,44px);letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
+.stat .n .u{color:var(--signal);font-size:.6em;margin-left:2px}
+.stat .l{color:var(--text-muted);font-size:14px;margin-top:var(--s3);line-height:1.4}
+
+/* ============================== PRICING ============================== */
+.pricing{padding-block:var(--s9)}
+.price-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--s5);max-width:840px}
+.price-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:var(--s7);display:flex;flex-direction:column}
+.price-card.featured{border-color:rgba(255,138,76,.5);box-shadow:var(--glow)}
+.price-badge{align-self:flex-start;font-family:var(--f-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--signal-fg);background:var(--signal);border-radius:var(--r-full);padding:4px 12px;margin-bottom:var(--s4)}
+.price-name{font-family:var(--f-display);font-weight:600;font-size:22px}
+.price-amt{font-family:var(--f-display);font-weight:500;font-size:52px;letter-spacing:-.02em;margin-top:var(--s3);line-height:1}
+.price-amt .per{font-family:var(--f-body);font-size:16px;color:var(--text-muted);font-weight:500}
+.price-desc{color:var(--text-secondary);margin-top:var(--s3);font-size:15.5px}
+.price-list{margin-top:var(--s5);margin-bottom:var(--s6);display:flex;flex-direction:column;gap:var(--s3)}
+.price-list li{display:flex;gap:var(--s3);align-items:flex-start;font-size:15.5px;color:var(--text-secondary)}
+.price-list .tick{margin-top:3px}
+.price-card .btn{width:100%;margin-top:auto}
+
+/* ============================== TESTIMONIAL ============================== */
+.quote{padding-block:var(--s9)}
+.quote-inner{max-width:820px;margin-inline:auto;text-align:center}
+.quote blockquote{font-family:var(--f-display);font-weight:400;font-size:clamp(24px,3.4vw,34px);line-height:1.3;letter-spacing:-.01em}
+.quote blockquote .mark{color:var(--signal)}
+.quote figcaption{margin-top:var(--s5);color:var(--text-muted);font-size:15px;font-family:var(--f-mono)}
+.quote figcaption b{color:var(--text-secondary);font-family:var(--f-body);font-weight:600}
+
+/* ============================== FINAL CTA ============================== */
+.final{padding-block:var(--s10)}
+.final-inner{position:relative;border:1px solid var(--border);border-radius:var(--r-lg);background:radial-gradient(120% 140% at 50% 0%,rgba(255,138,76,.12),transparent 60%),var(--surface);padding:clamp(40px,7vw,88px) var(--s6);text-align:center;overflow:hidden}
+.final h2{font-family:var(--f-display);font-weight:500;font-size:clamp(32px,5vw,54px);letter-spacing:-.025em;line-height:1.05}
+.final p{color:var(--text-secondary);font-size:19px;margin-top:var(--s5);max-width:46ch;margin-inline:auto}
+.final .cta-form{margin-inline:auto;justify-content:center}
+.final .cta-note{justify-content:center}
+
+/* ============================== FOOTER ============================== */
+.site-footer{border-top:1px solid var(--border);padding-block:var(--s8) var(--s7);margin-top:var(--s7)}
+.foot-grid{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:var(--s6)}
+.foot-brand .brand{margin-bottom:var(--s4)}
+.foot-brand p{color:var(--text-muted);font-size:14.5px;max-width:34ch}
+.foot-col h4{font-family:var(--f-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);margin-bottom:var(--s4)}
+.foot-col li{margin-bottom:var(--s3)}
+.foot-col a{color:var(--text-secondary);font-size:15px;transition:color .18s var(--ease)}
+.foot-col a:hover{color:var(--text)}
+.foot-bottom{display:flex;align-items:center;justify-content:space-between;margin-top:var(--s8);padding-top:var(--s5);border-top:1px solid var(--border);color:var(--text-muted);font-size:13.5px;flex-wrap:wrap;gap:var(--s4)}
+.foot-bottom .made{font-family:var(--f-mono);letter-spacing:.02em}
+
+/* ============================== REVEAL (JS-gated) ============================== */
+.js [data-reveal]{opacity:0;transform:translateY(24px)}
+.js [data-reveal].in{opacity:1;transform:none;transition:opacity .7s var(--ease),transform .7s var(--ease)}
+
+/* ============================== RESPONSIVE ============================== */
+@media (max-width:1000px){
+  .hero-grid{grid-template-columns:1fr;gap:var(--s8)}
+  .hero-copy{max-width:640px}
+  .resolve-stage{grid-template-columns:1fr;gap:var(--s7);min-height:0}
+  .stats-inner{grid-template-columns:repeat(2,1fr);gap:var(--s7) var(--s6)}
+  .foot-grid{grid-template-columns:1fr 1fr;gap:var(--s7) var(--s6)}
+  .foot-brand{grid-column:1 / -1}
+}
+@media (max-width:720px){
+  .nav-links{display:none}
+  .nav-cta .navlink{display:none}
+  .menu-btn{display:flex;margin-left:var(--s3)}
+  .nav-cta{margin-left:auto}
+  .navlink-mobile{display:block}
+  .site-header.menu-open{background:rgba(11,12,15,.92);backdrop-filter:blur(14px) saturate(1.4);border-bottom-color:var(--border)}
+  .site-header.menu-open .nav-links{
+    display:flex;flex-direction:column;align-items:stretch;gap:0;
+    position:absolute;left:0;right:0;top:74px;
+    background:var(--surface);border-bottom:1px solid var(--border);
+    padding:var(--s3) var(--s5) var(--s5);box-shadow:var(--shadow-md);
+  }
+  .site-header.menu-open .nav-links a.navlink{
+    padding:16px 2px;font-size:17px;color:var(--text);border-bottom:1px solid var(--border);
+  }
+  .site-header.menu-open .nav-links a.navlink:last-child{border-bottom:none}
+  .site-header.menu-open .nav-links a.navlink::after{display:none}
+  .menu-btn[aria-expanded="true"]{border-color:var(--signal);color:var(--signal)}
+  .feat-grid{grid-template-columns:1fr}
+  .steps{grid-template-columns:1fr;gap:var(--s7)}
+  .price-grid{grid-template-columns:1fr}
+  .foot-grid{grid-template-columns:1fr 1fr}
+  .foot-bottom{flex-direction:column;align-items:flex-start}
+  .quote blockquote{font-size:24px}
+}
+@media (max-width:520px){
+  :root{--s9:64px;--s10:80px}
+  body{font-size:16px}
+  .container{padding-inline:var(--s4)}
+  .hero{padding-top:var(--s7)}
+  .stats-inner{grid-template-columns:1fr 1fr;padding:var(--s6) var(--s5)}
+  .note-chip{position:static;width:100%;margin-top:var(--s4);right:auto;bottom:auto}
+  .cta-form{flex-direction:column}
+  .field{flex:0 0 auto}
+  .field,.cta-form .btn{width:100%}
+  .foot-grid{grid-template-columns:1fr}
+}
+
+/* ============================== REDUCED MOTION ============================== */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;scroll-behavior:auto !important}
+  .js [data-reveal]{opacity:1 !important;transform:none !important}
+  .rec-dot{animation:none}
+  .transcript .cursor{animation:none;opacity:1}
+}
+</style>
+</head>
+<body>
+
+<!-- ============================ HEADER ============================ -->
+<header class="site-header" id="siteHeader">
+  <div class="container">
+    <nav class="nav" aria-label="Primary">
+      <a class="brand" href="#top" aria-label="EchoNote home">
+        <svg class="mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <rect x="1" y="1" width="30" height="30" rx="9" fill="#131519" stroke="#2A2E37"/>
+          <g stroke="#FF8A4C" stroke-width="2.2" stroke-linecap="round">
+            <line x1="9" y1="16" x2="9" y2="16"/><line x1="13" y1="11" x2="13" y2="21"/>
+            <line x1="16.5" y1="8" x2="16.5" y2="24"/><line x1="20" y1="13" x2="20" y2="19"/>
+            <line x1="23.5" y1="15" x2="23.5" y2="17"/>
+          </g>
+        </svg>
+        EchoNote
+      </a>
+      <div class="nav-links" id="navLinks">
+        <a class="navlink" href="#how">How it works</a>
+        <a class="navlink" href="#features">Features</a>
+        <a class="navlink" href="#pricing">Pricing</a>
+        <a class="navlink navlink-mobile" href="#top">Sign in</a>
+      </div>
+      <div class="nav-cta">
+        <a class="navlink" href="#top">Sign in</a>
+        <a class="btn btn-primary btn-sm" href="#top">Start free</a>
+      </div>
+      <button class="menu-btn" id="menuBtn" aria-label="Open menu" aria-expanded="false">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/></svg>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ============================ HERO ============================ -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <span class="eyebrow">Voice notes, made legible</span>
+        <h1 id="heroTitle">Talk like a mess.<br>Read like a <span class="accent">memo.</span></h1>
+        <p class="hero-sub" data-reveal>EchoNote listens to your rambling voice memos and hands back a clean, searchable note — the summary, the decisions, the action items — in about eight seconds.</p>
+        <form class="cta-form" id="heroForm" novalidate data-reveal>
+          <div class="field">
+            <input id="heroEmail" name="email" type="email" inputmode="email" autocomplete="email" placeholder="you@work.com" aria-label="Work email" aria-describedby="heroMsg" />
+          </div>
+          <button type="submit" class="btn btn-primary">Start free</button>
+        </form>
+        <p class="form-msg" id="heroMsg" role="status" aria-live="polite"></p>
+        <p class="cta-note" data-reveal>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          Free for your first 30 memos. No card, no catch.
+        </p>
+      </div>
+
+      <div class="hero-visual" data-reveal>
+        <div class="panel" role="img" aria-label="EchoNote recording a voice memo — a live waveform above a running transcript, with a structured note assembling below.">
+          <div class="panel-top">
+            <span class="rec-pill"><span class="rec-dot"></span> Recording</span>
+            <span class="rec-time" id="recTime">00:47</span>
+          </div>
+          <div class="wave-wrap">
+            <canvas id="heroWave" aria-hidden="true"></canvas>
+            <div class="wave-fallback" id="heroWaveFallback" aria-hidden="true"></div>
+          </div>
+          <p class="transcript" id="heroTranscript" aria-hidden="true"></p>
+          <div class="note-chip" aria-hidden="true">
+            <div class="nc-label">Structured</div>
+            <div class="nc-title">Q3 launch sync</div>
+            <div class="nc-row"><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Move launch to Oct 3</div>
+            <div class="nc-row"><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Priya owns the timeline</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="trust" data-reveal>
+      <span>Trusted by 40,000+ people who think out loud</span>
+      <span class="divider"></span>
+      <span>SOC 2 Type II</span>
+      <span class="divider"></span>
+      <span>Your audio is never used to train models</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ RESOLVE (signature) ============================ -->
+<section class="resolve" id="resolve" aria-labelledby="resolveTitle">
+  <div class="container">
+    <div class="resolve-stage" id="resolveStage">
+      <div class="resolve-left">
+        <span class="eyebrow stage-eyebrow">The resolve</span>
+        <h2 class="stage-title" id="resolveTitle">Three rambling minutes,<br>one clean note.</h2>
+        <p class="stage-sub">Scroll, and watch a raw take settle into structure — exactly what EchoNote does the moment you stop recording.</p>
+        <div class="res-wave-wrap">
+          <canvas id="resWave" aria-hidden="true"></canvas>
+        </div>
+        <p class="res-raw" id="resRaw">“…okay so about the launch, I think we push it, the conference is the same week and Priya said the timeline's tight anyway, so maybe Oct 3, and someone's gotta tell design about the slip…”</p>
+        <div class="progress-track"><div class="progress-fill" id="resProgress"></div></div>
+        <div class="progress-label"><span id="resStateFrom">Raw audio</span><span id="resStateTo">Structured note</span></div>
+      </div>
+
+      <div class="resolve-right">
+        <article class="note-card" id="noteCard" aria-label="The structured note EchoNote produced">
+          <div class="nc-head">
+            <h3 data-note>Q3 launch sync</h3>
+            <span class="nc-date" data-note>Tue, Jul 15 · 3m 04s</span>
+          </div>
+          <p class="nc-summary" data-note>Push the launch to <b>Oct 3</b> to clear the conference. Priya owns the revised timeline; design needs a heads-up on the two-week slip.</p>
+          <div class="nc-block-label" data-note>Action items</div>
+          <div class="task done" data-task>
+            <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+            <span class="t-text"><span class="who">Priya</span> — redraw the launch timeline</span>
+            <span class="t-meta">due Fri</span>
+          </div>
+          <div class="task" data-task>
+            <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+            <span class="t-text">Move the press embargo to Oct 3</span>
+          </div>
+          <div class="task" data-task>
+            <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+            <span class="t-text">Tell the design team about the slip</span>
+          </div>
+          <div class="nc-block-label" data-note>Tags</div>
+          <div class="tag-row" data-note>
+            <span class="tag">#q3-launch</span><span class="tag">#decision</span><span class="tag">#priya</span><span class="tag">#timeline</span>
+          </div>
+        </article>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ FEATURES ============================ -->
+<section class="features" id="features" aria-labelledby="featTitle">
+  <div class="container">
+    <div class="section-head" data-reveal>
+      <span class="eyebrow">What you get back</span>
+      <h2 id="featTitle">Notes that read like you took them.</h2>
+      <p>Not a transcript wall. Structure — the way you'd have written it up if you'd had the time.</p>
+    </div>
+    <div class="feat-grid">
+      <article class="feat-card" data-reveal>
+        <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"/></svg></div>
+        <h3>Summaries you'd actually send</h3>
+        <p>One line at the top that says what the memo was really about — not the first sentence, the point.</p>
+      </article>
+      <article class="feat-card" data-reveal>
+        <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+        <h3>Action items, pulled out for you</h3>
+        <p>Every “I should”, “we need to”, and “don't forget” becomes a checkable task — with an owner and a due date when you named one.</p>
+      </article>
+      <article class="feat-card" data-reveal>
+        <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></div>
+        <h3>Search everything you've ever said</h3>
+        <p>Full-text across every memo. Find the walk where you decided the pricing, months later, by typing “pricing”.</p>
+      </article>
+      <article class="feat-card" data-reveal>
+        <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 12h16M4 19h10"/><circle cx="18" cy="19" r="2.4"/></svg></div>
+        <h3>It follows the thread</h3>
+        <p>Speaker- and topic-aware, so a memo with three tangents comes back as three clean sections — not one wall of text.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ HOW ============================ -->
+<section class="how" id="how" aria-labelledby="howTitle">
+  <div class="container">
+    <div class="section-head" data-reveal>
+      <span class="eyebrow">From mouth to memo</span>
+      <h2 id="howTitle">Three steps, and one of them is talking.</h2>
+    </div>
+    <div class="steps">
+      <div class="step" data-reveal><span class="bar"></span><span class="num">01</span>
+        <h3>Record or drop it in</h3>
+        <p>Hit record in the app, or forward a voice memo, a Zoom transcript, or any audio file. Up to 90 minutes.</p>
+      </div>
+      <div class="step" data-reveal><span class="bar"></span><span class="num">02</span>
+        <h3>EchoNote structures it</h3>
+        <p>In about eight seconds you get a summary, action items, speakers, and tags — laid out like you'd been taking notes the whole time.</p>
+      </div>
+      <div class="step" data-reveal><span class="bar"></span><span class="num">03</span>
+        <h3>Find it whenever</h3>
+        <p>Everything's searchable and linked. Ask “what did I decide about hiring?” and land on the exact memo.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ STATS ============================ -->
+<section class="stats" aria-label="EchoNote by the numbers">
+  <div class="container">
+    <div class="stats-inner" data-reveal>
+      <div class="stat"><div class="n">7.9<span class="u">s</span></div><div class="l">Median time to structure a 3-minute memo</div></div>
+      <div class="stat"><div class="n">1,284,507</div><div class="l">Memos structured for people so far</div></div>
+      <div class="stat"><div class="n">96<span class="u">%</span></div><div class="l">Of action items caught in our benchmark set</div></div>
+      <div class="stat"><div class="n">90<span class="u">min</span></div><div class="l">Longest single memo you can send</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ PRICING ============================ -->
+<section class="pricing" id="pricing" aria-labelledby="priceTitle">
+  <div class="container">
+    <div class="section-head" data-reveal>
+      <span class="eyebrow">Pricing</span>
+      <h2 id="priceTitle">Start free. Upgrade when talking becomes a habit.</h2>
+    </div>
+    <div class="price-grid">
+      <article class="price-card" data-reveal>
+        <div class="price-name">Free</div>
+        <div class="price-amt">$0<span class="per"> /forever</span></div>
+        <p class="price-desc">Enough to fall for it.</p>
+        <ul class="price-list">
+          <li><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> 30 memos a month, up to 15 min each</li>
+          <li><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Summaries and action items</li>
+          <li><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Full-text search across your memos</li>
+        </ul>
+        <a href="#top" class="btn btn-ghost">Start free</a>
+      </article>
+      <article class="price-card featured" data-reveal>
+        <span class="price-badge">Most popular</span>
+        <div class="price-name">Pro</div>
+        <div class="price-amt">$9<span class="per"> /month</span></div>
+        <p class="price-desc">For people who live in their voice memos.</p>
+        <ul class="price-list">
+          <li><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Unlimited memos, up to 90 min each</li>
+          <li><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Speaker labels and topic sections</li>
+          <li><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Send to Notion, Slack, and Todoist</li>
+          <li><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Priority structuring, even at peak</li>
+        </ul>
+        <a href="#top" class="btn btn-primary">Start 14-day Pro trial</a>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ TESTIMONIAL ============================ -->
+<section class="quote">
+  <div class="container">
+    <figure class="quote-inner" data-reveal>
+      <blockquote><span class="mark">“</span>I used to lose every good idea I had on a walk. Now I just talk, and by the time I'm back at my desk it's a note with the next steps already pulled out.<span class="mark">”</span></blockquote>
+      <figcaption><b>Maya Okonkwo</b> — founder, Tenline</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============================ FINAL CTA ============================ -->
+<section class="final">
+  <div class="container">
+    <div class="final-inner" data-reveal>
+      <h2>Stop retyping<br>your own voice.</h2>
+      <p>Talk it out once. Get it back structured. Your first 30 memos are on us.</p>
+      <form class="cta-form" id="finalForm" novalidate>
+        <div class="field">
+          <input id="finalEmail" name="email" type="email" inputmode="email" autocomplete="email" placeholder="you@work.com" aria-label="Work email" aria-describedby="finalMsg" />
+        </div>
+        <button type="submit" class="btn btn-primary">Start free</button>
+      </form>
+      <p class="form-msg" id="finalMsg" role="status" aria-live="polite"></p>
+      <p class="cta-note">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        No card, no catch. Cancel any time.
+      </p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ============================ FOOTER ============================ -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="#top" aria-label="EchoNote home">
+          <svg class="mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <rect x="1" y="1" width="30" height="30" rx="9" fill="#131519" stroke="#2A2E37"/>
+            <g stroke="#FF8A4C" stroke-width="2.2" stroke-linecap="round">
+              <line x1="9" y1="16" x2="9" y2="16"/><line x1="13" y1="11" x2="13" y2="21"/>
+              <line x1="16.5" y1="8" x2="16.5" y2="24"/><line x1="20" y1="13" x2="20" y2="19"/>
+              <line x1="23.5" y1="15" x2="23.5" y2="17"/>
+            </g>
+          </svg>
+          EchoNote
+        </a>
+        <p>Made for people who think out loud — and want it back in writing.</p>
+      </div>
+      <div class="foot-col">
+        <h4>Product</h4>
+        <ul>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+          <li><a href="#how">How it works</a></li>
+          <li><a href="#resolve">See it resolve</a></li>
+          <li><a href="#top">Changelog</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <h4>Company</h4>
+        <ul>
+          <li><a href="#top">About</a></li>
+          <li><a href="#top">Careers</a></li>
+          <li><a href="#top">Blog</a></li>
+          <li><a href="#top">Contact</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <h4>Legal</h4>
+        <ul>
+          <li><a href="#top">Privacy</a></li>
+          <li><a href="#top">Terms</a></li>
+          <li><a href="#top">Security</a></li>
+          <li><a href="#top">DPA</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 EchoNote Labs, Inc.</span>
+      <span class="made">Recorded, then written.</span>
+    </div>
+  </div>
+</footer>
+
+<!-- ============================ LIBRARIES (CDN) ============================ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.13.0/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.13.0/ScrollTrigger.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.13.0/SplitText.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.14/dist/lenis.min.js"></script>
+
+<script>
+/* ============================================================
+   EchoNote — progressive enhancement.
+   Content is fully readable with zero JS. This layer adds the
+   signature motion, and every non-essential effect is gated on
+   prefers-reduced-motion + library availability.
+   ============================================================ */
+(function(){
+  "use strict";
+  var docEl = document.documentElement;
+  docEl.classList.add("js");
+  var REDUCE = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var hasGSAP = typeof window.gsap !== "undefined";
+  var hasLenis = typeof window.Lenis !== "undefined";
+
+  /* ---------- header shadow on scroll ---------- */
+  var header = document.getElementById("siteHeader");
+  var onScrollHeader = function(){
+    if (window.scrollY > 12) header.classList.add("scrolled");
+    else header.classList.remove("scrolled");
+  };
+  onScrollHeader();
+  window.addEventListener("scroll", onScrollHeader, {passive:true});
+
+  /* ---------- mobile dropdown menu ---------- */
+  var menuBtn = document.getElementById("menuBtn");
+  var navLinks = document.getElementById("navLinks");
+  if (menuBtn && navLinks){
+    var setMenu = function(open){
+      header.classList.toggle("menu-open", open);
+      menuBtn.setAttribute("aria-expanded", open ? "true" : "false");
+      menuBtn.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+    };
+    menuBtn.addEventListener("click", function(e){
+      e.stopPropagation();
+      setMenu(!header.classList.contains("menu-open"));
+    });
+    navLinks.addEventListener("click", function(e){ if (e.target.closest("a")) setMenu(false); });
+    document.addEventListener("click", function(e){
+      if (header.classList.contains("menu-open") && !header.contains(e.target)) setMenu(false);
+    });
+    document.addEventListener("keydown", function(e){
+      if (e.key === "Escape" && header.classList.contains("menu-open")){ setMenu(false); menuBtn.focus(); }
+    });
+  }
+
+  /* ---------- email forms: validation + states ---------- */
+  function wireForm(formId, msgId){
+    var form = document.getElementById(formId);
+    if (!form) return;
+    var input = form.querySelector('input[type="email"]');
+    var msg = document.getElementById(msgId);
+    var btn = form.querySelector('button[type="submit"]');
+    form.addEventListener("submit", function(e){
+      e.preventDefault();
+      var val = (input.value||"").trim();
+      var ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+      if (!ok){
+        input.setAttribute("aria-invalid","true");
+        msg.textContent = "That email doesn't look right — mind checking it?";
+        msg.setAttribute("data-err","true");
+        input.focus();
+        return;
+      }
+      input.removeAttribute("aria-invalid");
+      msg.removeAttribute("data-err");
+      btn.disabled = true;
+      var original = btn.textContent;
+      btn.textContent = "Setting up…";
+      setTimeout(function(){
+        btn.disabled = false;
+        btn.textContent = original;
+        msg.textContent = "You're in. Check " + val + " for your link.";
+        input.value = "";
+      }, 900);
+    });
+    input.addEventListener("input", function(){
+      if (input.getAttribute("aria-invalid")==="true" && input.value.indexOf("@")>-1){
+        input.removeAttribute("aria-invalid"); msg.textContent=""; msg.removeAttribute("data-err");
+      }
+    });
+  }
+  wireForm("heroForm","heroMsg");
+  wireForm("finalForm","finalMsg");
+
+  /* ============================================================
+     CANVAS WAVEFORM — 2D, no library. Draws mirrored bars from a
+     moving field. `energy` (0..1) controls chaos/height, so the
+     Resolve section can flatten it to a calm line on scroll.
+     Static poster drawn for reduced-motion / offscreen / no-anim.
+     ============================================================ */
+  function makeWave(canvas, opts){
+    opts = opts || {};
+    var ctx = canvas.getContext ? canvas.getContext("2d") : null;
+    if (!ctx){ return null; } // no canvas support -> caller shows fallback
+    var BARW = opts.barWidth || 4, GAP = opts.gap || 4;
+    var color = opts.color || "#FF8A4C";
+    var colorCalm = opts.colorCalm || "#7FE3C6";
+    var W=0,H=0,DPR=1,N=0,phase=0,raf=null,running=false;
+    var energy = (opts.energy!=null)?opts.energy:1;
+
+    function resize(){
+      var rect = canvas.getBoundingClientRect();
+      if (!rect.width) return;
+      DPR = Math.min(window.devicePixelRatio||1, 2);
+      W = rect.width; H = rect.height;
+      canvas.width = Math.round(W*DPR); canvas.height = Math.round(H*DPR);
+      ctx.setTransform(DPR,0,0,DPR,0,0);
+      N = Math.max(8, Math.floor(W/(BARW+GAP)));
+    }
+    // deterministic pseudo-noise so bars look organic but stable
+    function field(i,t){
+      return (
+        Math.sin(i*0.45 + t*1.7) * 0.5 +
+        Math.sin(i*0.17 - t*1.1) * 0.32 +
+        Math.sin(i*0.9 + t*2.6) * 0.18
+      );
+    }
+    function lerp(a,b,x){return a+(b-a)*x;}
+    function hexToRgb(h){h=h.replace('#','');return [parseInt(h.substr(0,2),16),parseInt(h.substr(2,2),16),parseInt(h.substr(4,2),16)];}
+    var cSig=hexToRgb(color), cCalm=hexToRgb(colorCalm);
+
+    function draw(t){
+      if (!W) resize();
+      if (!W) return;
+      ctx.clearRect(0,0,W,H);
+      var mid = H/2;
+      var e = energy;
+      // color shifts from signal(amber) toward clarity(mint) as it calms
+      var mix = 1-e;
+      var r=Math.round(lerp(cSig[0],cCalm[0],mix)), g=Math.round(lerp(cSig[1],cCalm[1],mix)), b=Math.round(lerp(cSig[2],cCalm[2],mix));
+      for (var i=0;i<N;i++){
+        var x = i*(BARW+GAP) + (W - N*(BARW+GAP))/2 + GAP/2;
+        var env = Math.sin((i/N)*Math.PI); // taper ends
+        var amp = field(i,t)*env;
+        // as energy -> 0, bars collapse toward a thin flat line
+        var h = lerp(3, (Math.abs(amp)*H*0.42 + 5), e);
+        var alpha = lerp(0.5, 0.95, e*env + (1-e)*0.6);
+        ctx.fillStyle = "rgba("+r+","+g+","+b+","+alpha.toFixed(3)+")";
+        roundBar(ctx, x, mid-h, BARW, h*2, BARW/2);
+      }
+    }
+    function roundBar(c,x,y,w,h,rad){
+      if (h < w) { h = w; }
+      c.beginPath();
+      c.moveTo(x, y+rad);
+      c.arcTo(x, y, x+rad, y, rad);
+      c.arcTo(x+w, y, x+w, y+rad, rad);
+      c.lineTo(x+w, y+h-rad);
+      c.arcTo(x+w, y+h, x+w-rad, y+h, rad);
+      c.arcTo(x, y+h, x, y+h-rad, rad);
+      c.closePath(); c.fill();
+    }
+    function loop(){
+      phase += 0.016;
+      draw(phase);
+      if (running) raf = requestAnimationFrame(loop);
+    }
+    return {
+      resize: resize,
+      poster: function(){ resize(); draw(opts.posterT!=null?opts.posterT:1.2); },
+      start: function(){ if (running) return; running=true; raf=requestAnimationFrame(loop); },
+      stop: function(){ running=false; if (raf) cancelAnimationFrame(raf); },
+      setEnergy: function(v){ energy=v; if(!running) draw(phase); },
+      redraw: function(){ draw(phase); },
+      get running(){ return running; }
+    };
+  }
+
+  /* ---------- HERO waveform ---------- */
+  var heroCanvas = document.getElementById("heroWave");
+  var heroFallback = document.getElementById("heroWaveFallback");
+  var heroWave = heroCanvas ? makeWave(heroCanvas, {energy:1}) : null;
+  if (!heroWave && heroFallback){
+    // no canvas support: show static CSS bars
+    heroCanvas.style.display="none";
+    heroFallback.style.display="flex";
+    for (var k=0;k<28;k++){ var bar=document.createElement("i"); bar.style.height=(10+Math.abs(Math.sin(k*0.7))*70)+"px"; heroFallback.appendChild(bar); }
+  } else if (heroWave){
+    heroWave.poster(); // draw a frame immediately so it's never blank
+    if (!REDUCE){
+      var heroVisible=false;
+      var hObs = new IntersectionObserver(function(entries){
+        entries.forEach(function(en){
+          heroVisible = en.isIntersecting;
+          if (heroVisible) heroWave.start(); else heroWave.stop();
+        });
+      }, {threshold:0.05});
+      hObs.observe(heroCanvas);
+    }
+    window.addEventListener("resize", function(){ heroWave.resize(); if(!heroWave.running) heroWave.poster(); });
+  }
+
+  /* ---------- HERO transcript typewriter ---------- */
+  var tEl = document.getElementById("heroTranscript");
+  var TRANSCRIPT = "…so the thing about the Q3 launch is the conference lands the same week, and Priya already said the timeline's tight, so honestly we should just push it to the third and tell design about the slip…";
+  if (tEl){
+    if (REDUCE){
+      tEl.textContent = TRANSCRIPT;
+    } else {
+      var ci=0;
+      tEl.innerHTML = '<span id="tt"></span><span class="cursor"></span>';
+      var ttSpan = document.getElementById("tt");
+      var typing=false, started=false;
+      function type(){
+        if (ci <= TRANSCRIPT.length){
+          ttSpan.textContent = TRANSCRIPT.slice(0,ci);
+          ci++;
+          setTimeout(type, 26 + Math.random()*40);
+        } else {
+          setTimeout(function(){ ci=0; type(); }, 3200); // loop
+        }
+      }
+      var tObs = new IntersectionObserver(function(entries){
+        entries.forEach(function(en){
+          if (en.isIntersecting && !started){ started=true; type(); }
+        });
+      }, {threshold:0.2});
+      tObs.observe(tEl);
+    }
+  }
+
+  /* ---------- HERO recorder timer (ticks up, cosmetic) ---------- */
+  var recTime = document.getElementById("recTime");
+  if (recTime && !REDUCE){
+    var secs = 47;
+    setInterval(function(){
+      secs++; var m=Math.floor(secs/60), s=secs%60;
+      recTime.textContent = String(m).padStart(2,"0")+":"+String(s).padStart(2,"0");
+    }, 1000);
+  }
+
+  /* ============================================================
+     SMOOTH SCROLL (Lenis) + GSAP, only when motion is welcome.
+     ============================================================ */
+  var lenis = null;
+  if (hasGSAP){
+    gsap.registerPlugin(ScrollTrigger);
+
+    if (hasLenis && !REDUCE){
+      lenis = new Lenis({ duration:1.05, smoothWheel:true, wheelMultiplier:1, touchMultiplier:1.4 });
+      lenis.on("scroll", ScrollTrigger.update);
+      gsap.ticker.add(function(time){ lenis.raf(time*1000); });
+      gsap.ticker.lagSmoothing(0);
+    }
+
+    /* anchor links -> smooth (Lenis if present, else native) */
+    document.querySelectorAll('a[href^="#"]').forEach(function(a){
+      a.addEventListener("click", function(e){
+        var id = a.getAttribute("href");
+        if (id.length<2) { if(id==="#top"){/*allow*/} }
+        var target = (id==="#top") ? document.body : document.querySelector(id);
+        if (!target) return;
+        e.preventDefault();
+        if (lenis) lenis.scrollTo(target, {offset:-80});
+        else target.scrollIntoView({behavior: REDUCE?"auto":"smooth", block:"start"});
+        if (history.replaceState) history.replaceState(null,"",id);
+      });
+    });
+
+    /* ---------- reveal-on-scroll ---------- */
+    if (REDUCE){
+      document.querySelectorAll("[data-reveal]").forEach(function(el){ el.classList.add("in"); });
+    } else {
+      gsap.utils.toArray("[data-reveal]").forEach(function(el){
+        ScrollTrigger.create({
+          trigger: el, start:"top 88%", once:true,
+          onEnter: function(){ el.classList.add("in"); }
+        });
+      });
+    }
+
+    /* ---------- headline split reveal ---------- */
+    var heroTitle = document.getElementById("heroTitle");
+    if (heroTitle && !REDUCE && typeof SplitText !== "undefined"){
+      (document.fonts ? document.fonts.ready : Promise.resolve()).then(function(){
+        try{
+          var split = new SplitText(heroTitle, {type:"lines", linesClass:"line"});
+          gsap.set(heroTitle, {perspective:600});
+          gsap.from(split.lines, {
+            yPercent:120, opacity:0, rotationX:-40, transformOrigin:"0% 50% -40",
+            duration:0.9, ease:"power3.out", stagger:0.12, delay:0.1
+          });
+        }catch(err){ /* leave title visible */ }
+      });
+    }
+
+    /* ---------- step bars light up ---------- */
+    if (!REDUCE){
+      gsap.utils.toArray(".step").forEach(function(step,i){
+        ScrollTrigger.create({ trigger:step, start:"top 80%", once:true,
+          onEnter:function(){ setTimeout(function(){ step.classList.add("lit"); }, i*120); } });
+      });
+    } else {
+      document.querySelectorAll(".step").forEach(function(s){ s.classList.add("lit"); });
+    }
+
+    /* ============================================================
+       THE RESOLVE — pinned, scroll-scrubbed signature sequence.
+       ============================================================ */
+    var resCanvas = document.getElementById("resWave");
+    var resWave = resCanvas ? makeWave(resCanvas, {energy:1, posterT:0.4}) : null;
+    var progressFill = document.getElementById("resProgress");
+    var noteEls = gsap.utils.toArray("#noteCard [data-note]");
+    var taskEls = gsap.utils.toArray("#noteCard [data-task]");
+    var resRaw = document.getElementById("resRaw");
+    var stateFrom = document.getElementById("resStateFrom");
+    var stateTo = document.getElementById("resStateTo");
+
+    if (resWave) resWave.poster();
+
+    if (REDUCE || !resWave){
+      // static end-state: note fully visible, tasks in final states, calm wave
+      if (resWave){ resWave.setEnergy(0.12); resWave.redraw(); }
+      if (progressFill) progressFill.style.width="100%";
+      if (resRaw) resRaw.style.opacity="0.4"; // static end-state reads as "done", not "raw + done"
+      taskEls.forEach(function(t){ /* CSS already reflects .done on the first */ });
+    } else {
+      // keep a rAF loop running while section is in view so the wave animates
+      var resActive=false;
+      var resObs = new IntersectionObserver(function(entries){
+        entries.forEach(function(en){
+          resActive = en.isIntersecting;
+          if (resActive) resWave.start(); else resWave.stop();
+        });
+      }, {threshold:0.01});
+      resObs.observe(resCanvas);
+
+      // set the note's animated starting state (hidden). No-JS keeps it visible.
+      gsap.set(noteEls, {opacity:0, y:18});
+      gsap.set("#noteCard", {opacity:0.12, y:30, scale:0.98}); // faint ghost, never a blank void
+      taskEls.forEach(function(t){ t.classList.remove("done"); });
+      gsap.set(taskEls, {opacity:0, x:14});
+
+      var resObj = { e:1 };
+      var stage = document.getElementById("resolveStage");
+
+      var tl = gsap.timeline({
+        scrollTrigger:{
+          trigger: stage,
+          start:"center center",
+          end:"+=140%",
+          pin:true,
+          scrub:0.6,
+          onUpdate:function(self){
+            if (progressFill) progressFill.style.width = Math.round(self.progress*100)+"%";
+            if (self.progress > 0.5){ if(stateFrom) stateFrom.style.opacity=".4"; }
+            else { if(stateFrom) stateFrom.style.opacity="1"; }
+          }
+        }
+      });
+      // 1) waveform calms + raw transcript fades
+      tl.to(resObj, { e:0.12, duration:0.4, ease:"power1.inOut",
+        onUpdate:function(){ resWave.setEnergy(resObj.e); } }, 0);
+      tl.to(resRaw, { opacity:0.25, filter:"blur(2px)", duration:0.3 }, 0.05);
+      // 2) note card materialises
+      tl.to("#noteCard", { opacity:1, y:0, scale:1, duration:0.35, ease:"power2.out" }, 0.28);
+      tl.to(noteEls, { opacity:1, y:0, duration:0.4, stagger:0.06, ease:"power2.out" }, 0.34);
+      // 3) tasks check in
+      tl.to(taskEls, { opacity:1, x:0, duration:0.3, stagger:0.12, ease:"power2.out",
+        onComplete:function(){ var first=taskEls[0]; if(first) first.classList.add("done"); } }, 0.6);
+      // ensure the completed task reflects state even when scrubbing backward/forward
+      tl.eventCallback("onUpdate", function(){
+        var first = taskEls[0];
+        if (!first) return;
+        if (tl.progress() > 0.82) first.classList.add("done");
+        else first.classList.remove("done");
+      });
+
+      window.addEventListener("resize", function(){ resWave.resize(); });
+    }
+
+    // Refresh once fonts/layout settle so pin math is correct.
+    (document.fonts ? document.fonts.ready : Promise.resolve()).then(function(){
+      ScrollTrigger.refresh();
+    });
+    window.addEventListener("load", function(){ ScrollTrigger.refresh(); });
+  } else {
+    // No GSAP at all: reveal everything, note stays visible, wave is a poster.
+    document.querySelectorAll("[data-reveal]").forEach(function(el){ el.classList.add("in"); });
+    document.querySelectorAll(".step").forEach(function(s){ s.classList.add("lit"); });
+  }
+})();
+</script>
+</body>
+</html>

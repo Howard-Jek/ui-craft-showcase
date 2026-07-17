@@ -1,0 +1,153 @@
+[
+  {
+    "passed": true,
+    "url": "file:///Users/howiiee/.claude/skills/ui-craft-workspace/showcase-opus/outputs/index.html",
+    "viewport": {
+      "width": 1280,
+      "height": 900
+    },
+    "colorScheme": "dark",
+    "counts": {
+      "errors": 0,
+      "warnings": 0,
+      "byType": {}
+    },
+    "errors": [],
+    "warnings": [],
+    "_meta": {
+      "label": "desktop-1280",
+      "reduce": false,
+      "consoleErrors": []
+    }
+  },
+  {
+    "passed": true,
+    "url": "file:///Users/howiiee/.claude/skills/ui-craft-workspace/showcase-opus/outputs/index.html",
+    "viewport": {
+      "width": 375,
+      "height": 812
+    },
+    "colorScheme": "dark",
+    "counts": {
+      "errors": 0,
+      "warnings": 4,
+      "byType": {
+        "zero-size": 4
+      }
+    },
+    "errors": [],
+    "warnings": [
+      {
+        "type": "zero-size",
+        "message": "Interactive element has zero rendered size",
+        "selector": "#navLinks > a.navlink:nth-of-type(1)"
+      },
+      {
+        "type": "zero-size",
+        "message": "Interactive element has zero rendered size",
+        "selector": "#navLinks > a.navlink:nth-of-type(2)"
+      },
+      {
+        "type": "zero-size",
+        "message": "Interactive element has zero rendered size",
+        "selector": "#navLinks > a.navlink:nth-of-type(3)"
+      },
+      {
+        "type": "zero-size",
+        "message": "Interactive element has zero rendered size",
+        "selector": "#navLinks > a.navlink.navlink-mobile:nth-of-type(4)"
+      }
+    ],
+    "_meta": {
+      "label": "mobile-375",
+      "reduce": false,
+      "consoleErrors": []
+    }
+  },
+  {
+    "passed": true,
+    "url": "file:///Users/howiiee/.claude/skills/ui-craft-workspace/showcase-opus/outputs/index.html",
+    "viewport": {
+      "width": 1280,
+      "height": 900
+    },
+    "colorScheme": "dark",
+    "counts": {
+      "errors": 0,
+      "warnings": 0,
+      "byType": {}
+    },
+    "errors": [],
+    "warnings": [],
+    "_meta": {
+      "label": "desktop-1280-reduced",
+      "reduce": true,
+      "consoleErrors": []
+    }
+  },
+  {
+    "passed": true,
+    "url": "file:///Users/howiiee/.claude/skills/ui-craft-workspace/showcase-opus/outputs/index.html",
+    "viewport": {
+      "width": 375,
+      "height": 812
+    },
+    "colorScheme": "dark",
+    "counts": {
+      "errors": 0,
+      "warnings": 4,
+      "byType": {
+        "zero-size": 4
+      }
+    },
+    "errors": [],
+    "warnings": [
+      {
+        "type": "zero-size",
+        "message": "Interactive element has zero rendered size",
+        "selector": "#navLinks > a.navlink:nth-of-type(1)"
+      },
+      {
+        "type": "zero-size",
+        "message": "Interactive element has zero rendered size",
+        "selector": "#navLinks > a.navlink:nth-of-type(2)"
+      },
+      {
+        "type": "zero-size",
+        "message": "Interactive element has zero rendered size",
+        "selector": "#navLinks > a.navlink:nth-of-type(3)"
+      },
+      {
+        "type": "zero-size",
+        "message": "Interactive element has zero rendered size",
+        "selector": "#navLinks > a.navlink.navlink-mobile:nth-of-type(4)"
+      }
+    ],
+    "_meta": {
+      "label": "mobile-375-reduced",
+      "reduce": true,
+      "consoleErrors": []
+    }
+  },
+  {
+    "passed": true,
+    "url": "file:///Users/howiiee/.claude/skills/ui-craft-workspace/showcase-opus/outputs/index.html",
+    "viewport": {
+      "width": 768,
+      "height": 1024
+    },
+    "colorScheme": "dark",
+    "counts": {
+      "errors": 0,
+      "warnings": 0,
+      "byType": {}
+    },
+    "errors": [],
+    "warnings": [],
+    "_meta": {
+      "label": "tablet-768",
+      "reduce": false,
+      "consoleErrors": []
+    }
+  }
+]
