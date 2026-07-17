@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Style tile — Somnium Draft</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&family=Instrument+Sans:wght@400;500&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#0A0B10; --surface:#12141C; --line:#2A2E3D; --line-lit:#6E7690;
+    --text:#E8EAF2; --text-secondary:#A8AEC2; --text-muted:#7E8499;
+    --phosphor:#7BEFB2; --phosphor-fg:#0A0B10;
+    --mono:"Geist Mono",monospace; --body:"Instrument Sans",sans-serif;
+    --display:"Newsreader",serif;
+  }
+  *{margin:0;box-sizing:border-box}
+  body{background:var(--void);color:var(--text);font:400 16px/1.6 var(--body)}
+  .frame{position:relative;max-width:960px;margin:0 auto;padding:24px 24px 64px;overflow:hidden}
+  .art{position:absolute;inset:0;pointer-events:none}
+  header{display:flex;justify-content:space-between;align-items:baseline;
+    border-bottom:1px solid var(--line);padding-bottom:16px;position:relative}
+  .mark{font:500 13px var(--mono);letter-spacing:.14em}
+  .mark b{color:var(--phosphor);font-weight:500}
+  nav a{font:400 12px var(--mono);color:var(--text-secondary);text-decoration:none;padding:14px 10px;margin:-14px -10px;
+    letter-spacing:.1em;text-transform:uppercase;border-bottom:1px solid var(--line)}
+  .eyebrow{font:400 12px var(--mono);color:var(--text-muted);letter-spacing:.18em;
+    text-transform:uppercase;margin:96px 0 24px;position:relative}
+  h1{font:400 clamp(44px,9vw,88px)/1.08 var(--display);letter-spacing:-.01em;
+    max-width:12ch;position:relative}
+  h1 em{font-style:italic;color:var(--text-secondary)}
+  .thesis{margin:24px 0 0;max-width:44ch;color:var(--text-secondary);position:relative}
+  .phases{display:flex;gap:16px;flex-wrap:wrap;margin-top:48px;position:relative}
+  .phases span{font:400 11px var(--mono);color:var(--text-muted);letter-spacing:.12em}
+  .phases span.on{color:var(--phosphor)}
+  .card{margin-top:96px;background:var(--surface);border:1px solid var(--line);
+    padding:24px;max-width:420px;position:relative}
+  .card h2{font:400 24px/1.2 var(--display);margin-bottom:8px}
+  .card p{font-size:14px;color:var(--text-secondary)}
+  .card .stat{display:flex;justify-content:space-between;border-top:1px solid var(--line);
+    margin-top:16px;padding-top:12px;font:400 12px var(--mono)}
+  .card .stat b{color:var(--phosphor);font-weight:500}
+  .cta{display:inline-block;margin-top:48px;background:var(--phosphor);color:var(--phosphor-fg);
+    font:500 13px var(--mono);letter-spacing:.08em;text-transform:uppercase;
+    text-decoration:none;padding:14px 22px;border-radius:2px;position:relative}
+  a:focus-visible{outline:2px solid currentColor;outline-offset:3px}
+</style>
+</head>
+<body>
+<div class="frame">
+  <!-- static hand-placed suggestion of the canvas linework: dormant nodes, dotted arcs, one traced DAG edge sealing at a gate -->
+  <svg class="art" viewBox="0 0 960 900" preserveAspectRatio="xMidYMin slice" aria-hidden="true">
+    <g stroke="#2A2E3D" fill="none" stroke-width="1">
+      <path d="M80 260 A 420 420 0 0 1 880 220" stroke-dasharray="2 7"/>
+      <path d="M40 520 A 560 560 0 0 1 920 460" stroke-dasharray="2 9"/>
+      <path d="M140 760 A 480 480 0 0 1 860 720" stroke-dasharray="2 7"/>
+      <path d="M120 640 H 400 M470 640 H 620" />
+    </g>
+    <g fill="#2A2E3D">
+      <circle cx="120" cy="180" r="2.5"/><circle cx="300" cy="120" r="2"/>
+      <circle cx="620" cy="150" r="2.5"/><circle cx="840" cy="300" r="2"/>
+      <circle cx="220" cy="420" r="2"/><circle cx="740" cy="560" r="2.5"/>
+      <circle cx="90" cy="700" r="2"/><circle cx="520" cy="820" r="2"/>
+    </g>
+    <!-- traced edge arriving at a sealed gate, phosphor pulse -->
+    <g stroke="#6E7690" fill="none" stroke-width="1">
+      <path d="M120 640 C 260 640 300 590 420 590 S 610 640 640 640"/>
+      <path d="M652 628 v24 M668 628 v24"/>
+    </g>
+    <circle cx="120" cy="640" r="3.5" fill="#6E7690"/>
+    <circle cx="640" cy="640" r="4" fill="#7BEFB2"/>
+    <circle cx="640" cy="640" r="10" fill="none" stroke="#7BEFB2" stroke-opacity=".35"/>
+    <text x="688" y="644" font-family="Geist Mono,monospace" font-size="11" fill="#7E8499">gate.holdout — sealed</text>
+  </svg>
+
+  <header>
+    <div class="mark"><b>●</b>&nbsp;SANDMAN</div>
+    <nav><a href="https://github.com/Howard-Jek/sandman">GitHub ↗</a></nav>
+  </header>
+
+  <p class="eyebrow">Autonomous agent teams / P0 – P5</p>
+  <h1>It builds while you <em>sleep</em>.</h1>
+  <p class="thesis">SANDMAN orchestrates a team of AI agents through a gated pipeline —
+    plan, review, build, ship, deploy — and refuses its own work until the oracle says otherwise.</p>
+
+  <div class="phases">
+    <span class="on">P0 PLAN</span><span>P1 REVIEW</span><span>P2 BUILD</span>
+    <span>P3 TEST</span><span>P4 SHIP</span><span>P5 DEPLOY</span>
+  </div>
+
+  <div class="card">
+    <h2>Every task meets an oracle.</h2>
+    <p>SANDMAN drafts the verification, an adversarial Nightmare hardens it, and the
+       builder must satisfy a test it cannot game.</p>
+    <div class="stat"><span>held-out correct</span><b>23 / 24</b></div>
+    <div class="stat"><span>oracle seal-rate</span><b>0.96</b></div>
+  </div>
+
+  <a class="cta" href="https://github.com/Howard-Jek/sandman">Read the evidence</a>
+</div>
+</body>
+</html>

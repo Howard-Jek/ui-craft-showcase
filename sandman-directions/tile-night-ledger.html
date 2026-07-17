@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Style tile — Night Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --char:#16130D; --panel:#201C14; --rule:#3A342A;
+    --bone:#EFE9DC; --bone-secondary:#C4BCAB; --bone-muted:#A39B8B;
+    --meter:#E8A33D; --meter-fg:#16130D; --seal:#8FD0A0; --refuse:#E58A7A;
+    --mono:"IBM Plex Mono",monospace; --display:"Archivo",sans-serif;
+  }
+  *{margin:0;box-sizing:border-box}
+  body{background:var(--char);color:var(--bone);font:400 15px/32px var(--mono);
+    font-variant-numeric:tabular-nums}
+  .frame{max-width:920px;margin:0 auto;padding:32px 24px 64px}
+  header{display:flex;justify-content:space-between;border-bottom:1px solid var(--rule);
+    padding-bottom:16px;font-size:13px;letter-spacing:.12em}
+  header .no{color:var(--bone-muted)}
+  .eyebrow{font-size:12px;color:var(--bone-muted);letter-spacing:.18em;
+    text-transform:uppercase;margin:96px 0 24px}
+  h1{font:700 clamp(40px,9vw,84px)/1.02 var(--display);letter-spacing:-.01em;
+    text-transform:uppercase;max-width:11ch}
+  .thesis{margin:32px 0 0;max-width:44ch;color:var(--bone-secondary);font-size:14px}
+  .meterbar{margin-top:64px;font-size:12px;color:var(--bone-muted)}
+  .meterbar b{color:var(--meter);font-weight:500}
+  .ledger{margin-top:96px;border-top:1px solid var(--rule);
+    background:repeating-linear-gradient(to bottom,transparent 0 31px,var(--rule) 31px 32px)}
+  .row{display:grid;grid-template-columns:40px 56px 1fr 72px 92px;gap:12px;
+    height:32px;align-items:center;font-size:13px;white-space:nowrap}
+  .row>span:nth-child(3){min-width:0;overflow:hidden;text-overflow:ellipsis}
+  a:focus-visible{outline:2px solid var(--meter);outline-offset:3px}
+  .row .n{color:var(--bone-muted)}
+  .row .t{color:var(--bone-secondary)}
+  .row .c{text-align:right;color:var(--meter)}
+  .row .s{text-align:right}
+  .stamp{display:inline-block;font-size:11px;letter-spacing:.1em;padding:0 6px;
+    line-height:20px;border:1.5px solid currentColor}
+  .ok{color:var(--seal)} .no2{color:var(--refuse)}
+  .total{display:grid;grid-template-columns:1fr auto;border-top:1px solid var(--rule);
+    border-bottom:1px solid var(--rule);margin-top:-1px;height:64px;align-items:center;
+    font-size:14px}
+  .total b{color:var(--meter);font:700 22px var(--display)}
+  .foot{margin-top:64px;color:var(--bone-secondary);font-size:14px;max-width:44ch}
+  .cta{display:inline-block;margin-top:40px;background:var(--meter);color:var(--meter-fg);
+    font:500 13px var(--mono);letter-spacing:.08em;text-transform:uppercase;
+    text-decoration:none;padding:14px 22px}
+  @media(max-width:640px){
+    .row{grid-template-columns:32px 1fr 64px 88px}
+    .row .t{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="frame">
+  <header>
+    <span>SANDMAN</span>
+    <span class="no">LEDGER № 02 — NIGHT OF 26 JUN</span>
+  </header>
+
+  <p class="eyebrow">Autonomous agents, audited line by line</p>
+  <h1>Every build leaves a receipt.</h1>
+  <p class="thesis">SANDMAN runs a team of AI agents through a gated pipeline overnight —
+    metered to the cent, refused when wrong, sealed when proven. This is a real one.</p>
+  <p class="meterbar">meter&nbsp;&nbsp;$0.00 ────────────────▮▮▮▮ <b>$1.84</b></p>
+
+  <!-- the signature: the self-writing audit log (static suggestion) -->
+  <div class="ledger" role="table" aria-label="audit log excerpt">
+    <div class="row"><span class="n">001</span><span class="t">22:03</span><span>plan.decompose — 5 tasks, 3 waves</span><span class="c">$0.02</span><span class="s">·</span></div>
+    <div class="row"><span class="n">002</span><span class="t">22:11</span><span>forge.oracle — nightmare sealed</span><span class="c">$0.09</span><span class="s">·</span></div>
+    <div class="row"><span class="n">003</span><span class="t">22:31</span><span>build.elo ‖ build.db ‖ infra</span><span class="c">$0.74</span><span class="s">·</span></div>
+    <div class="row"><span class="n">004</span><span class="t">22:58</span><span>gate.holdout — button 4.3:1, fails AA</span><span class="c">$0.00</span><span class="s"><span class="stamp no2">REFUSED</span></span></div>
+    <div class="row"><span class="n">005</span><span class="t">23:12</span><span>build.ui — retry 2, contrast ≥ 4.5:1</span><span class="c">$0.28</span><span class="s">·</span></div>
+    <div class="row"><span class="n">006</span><span class="t">23:40</span><span>gate.composite — behavior + AA + judge</span><span class="c">$0.71</span><span class="s"><span class="stamp ok">SEALED</span></span></div>
+    <div class="total"><span>night total — tasks 5/5 · your involvement: asleep</span><b>$1.84</b></div>
+  </div>
+
+  <p class="foot">Line 004 is the product: the gate refused its own builder's work and made
+    it try again. 23/24 held-out-correct, because SANDMAN can say no.</p>
+
+  <a class="cta" href="https://github.com/Howard-Jek/sandman">Open the ledger</a>
+</div>
+</body>
+</html>

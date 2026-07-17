@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Style tile — The Morning Printout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F4F1E9; --band:#EBE6D9; --grid:#D9D2C0;
+    --ink:#1C1A16; --ink-secondary:#524D42; --ink-muted:#635D4E;
+    --trace:#A03A28; --trace-fg:#F4F1E9; --stage:#2C3A63;
+    --mono:"IBM Plex Mono",monospace; --body:"IBM Plex Sans",sans-serif;
+    --display:"Instrument Serif",serif;
+  }
+  *{margin:0;box-sizing:border-box}
+  body{background:var(--paper);color:var(--ink);font:400 16px/1.6 var(--body);
+    background-image:repeating-linear-gradient(to bottom,transparent 0 31px,var(--grid) 31px 32px)}
+  .frame{max-width:960px;margin:0 auto;padding:24px 24px 64px;display:grid;
+    grid-template-columns:72px 1fr;column-gap:24px}
+  @media(min-width:700px){.frame{grid-template-columns:140px 1fr;column-gap:40px}}
+  .channel{grid-row:1/9}
+  .channel svg{width:100%;height:100%}
+  .full{grid-column:2}
+  header.full{display:flex;justify-content:space-between;align-items:baseline;
+    border-bottom:2px solid var(--ink);padding-bottom:12px}
+  .mast{font:500 13px var(--mono);letter-spacing:.14em}
+  .time{font:400 12px var(--mono);color:var(--ink-muted)}
+  .eyebrow{font:400 12px var(--mono);color:var(--ink-muted);letter-spacing:.18em;
+    text-transform:uppercase;margin:72px 0 16px}
+  h1{font:400 clamp(40px,8vw,72px)/1.1 var(--display);max-width:14ch}
+  h1 em{font-style:italic;color:var(--trace)}
+  .thesis{margin:24px 0 0;max-width:46ch;color:var(--ink-secondary)}
+  .stampline{margin-top:32px;font:400 12px var(--mono);color:var(--ink-muted)}
+  .stampline b{color:var(--trace);font-weight:500}
+  .bandbox{margin-top:80px;background:var(--band);border-top:1px solid var(--grid);
+    border-bottom:1px solid var(--grid);padding:24px}
+  .bandbox .stage{font:500 12px var(--mono);color:var(--stage);letter-spacing:.14em;
+    text-transform:uppercase}
+  .bandbox h2{font:400 30px/1.2 var(--display);margin:8px 0 16px}
+  table{width:100%;border-collapse:collapse;font:400 13px var(--mono)}
+  td{padding:10px 0;border-top:1px solid var(--grid)}
+  td:last-child{text-align:right;font-weight:500}
+  td .neg{color:var(--trace)}
+  .cta{display:inline-block;margin-top:48px;background:var(--trace);color:var(--trace-fg);
+    font:500 13px var(--mono);letter-spacing:.08em;text-transform:uppercase;
+    text-decoration:none;padding:14px 22px}
+  a:focus-visible{outline:2px solid currentColor;outline-offset:3px}
+</style>
+</head>
+<body>
+<div class="frame">
+  <!-- left recorder channel: static hand-placed suggestion of the overnight trace -->
+  <div class="channel" aria-hidden="true">
+    <svg viewBox="0 0 120 1200" preserveAspectRatio="xMidYMin meet" fill="none">
+      <path stroke="#A03A28" stroke-width="1.5"
+        d="M60 0 V90 l14 10 -14 10 V200
+           q-30 24 0 48 q30 24 0 48 q-30 24 0 48 V420
+           l10 6 -20 10 20 10 -20 10 20 10 -20 10 20 10 -10 8 V600
+           q-40 40 0 80 q40 40 0 80 V840
+           V1050 l16 12 -16 12 V1200"/>
+      <g font-family="IBM Plex Mono,monospace" font-size="10" fill="#635D4E">
+        <text x="4" y="104">02:14</text>
+        <text x="4" y="460">03:47</text>
+        <text x="4" y="1068">06:41</text>
+      </g>
+    </svg>
+  </div>
+
+  <header class="full">
+    <div class="mast">SANDMAN — OVERNIGHT BUILD REPORT</div>
+    <div class="time">printed 06:41</div>
+  </header>
+
+  <div class="full">
+    <p class="eyebrow">Autonomous agent teams / audited</p>
+    <h1>It worked the <em>night shift</em>.</h1>
+    <p class="thesis">SANDMAN runs a team of AI agents through a gated pipeline while you
+      sleep — plan, review, build, ship, deploy — and prints the proof by morning.
+      Every claim on this page has a file path.</p>
+    <p class="stampline">02:14 oracle forged · 02:31 first build <b>refused</b> · 03:47 sealed</p>
+  </div>
+
+  <div class="full bandbox">
+    <p class="stage">Stage P4 — REM / ship</p>
+    <h2>Lab results</h2>
+    <table>
+      <tr><td>held-out correct (7 dev families)</td><td>23 / 24</td></tr>
+      <tr><td>raw one-shot baseline</td><td><span class="neg">10 / 24</span></td></tr>
+      <tr><td>oracle seal-rate</td><td>0.96</td></tr>
+      <tr><td>capstone: full stack, 5 tasks, 3 waves</td><td>$1.84</td></tr>
+    </table>
+  </div>
+
+  <div class="full">
+    <a class="cta" href="https://github.com/Howard-Jek/sandman">Read the readout</a>
+  </div>
+</div>
+</body>
+</html>
