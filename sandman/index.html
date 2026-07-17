@@ -42,8 +42,12 @@
   /* ---------- backdrops (decorative, behind DOM) ---------- */
   .backdrop{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
   #weave{display:none}
-  html.canvas-on #weave{display:block}
+  html.canvas-on #weave{display:block;opacity:.62}
   html.canvas-on .static-weave{display:none}
+  /* Gate-2 director's note: shield copy from the weave — soft void-colored halo on text
+     glyphs (inherits, zero layout risk) + the global canvas dim above. */
+  h1,h2,h3,p,li,dt,dd,.eyebrow,.lead{text-shadow:0 1px 14px var(--void),0 0 36px var(--void)}
+  .cta,.gh{text-shadow:none}
   .static-weave{display:block}
   .static-weave svg{position:absolute;inset:0;width:100%;height:100%}
 
