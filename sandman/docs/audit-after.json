@@ -1,0 +1,53 @@
+{
+  "375": {
+    "passed": true,
+    "url": "file:///Users/howiiee/.claude/skills/ui-craft-workspace/sandman-site/build/outputs/index.html",
+    "viewport": {
+      "width": 375,
+      "height": 812
+    },
+    "colorScheme": "dark",
+    "counts": {
+      "errors": 0,
+      "warnings": 0,
+      "byType": {}
+    },
+    "errors": [],
+    "warnings": [],
+    "consoleErrors": []
+  },
+  "768": {
+    "passed": true,
+    "url": "file:///Users/howiiee/.claude/skills/ui-craft-workspace/sandman-site/build/outputs/index.html",
+    "viewport": {
+      "width": 768,
+      "height": 1024
+    },
+    "colorScheme": "dark",
+    "counts": {
+      "errors": 0,
+      "warnings": 0,
+      "byType": {}
+    },
+    "errors": [],
+    "warnings": [],
+    "consoleErrors": []
+  },
+  "1280": {
+    "passed": true,
+    "url": "file:///Users/howiiee/.claude/skills/ui-craft-workspace/sandman-site/build/outputs/index.html",
+    "viewport": {
+      "width": 1280,
+      "height": 900
+    },
+    "colorScheme": "dark",
+    "counts": {
+      "errors": 0,
+      "warnings": 0,
+      "byType": {}
+    },
+    "errors": [],
+    "warnings": [],
+    "consoleErrors": []
+  }
+}

@@ -1,0 +1,140 @@
+{
+  "375": {
+    "passed": false,
+    "url": "file:///Users/howiiee/.claude/skills/ui-craft-workspace/sandman-site/build/outputs/index.html",
+    "viewport": {
+      "width": 375,
+      "height": 812
+    },
+    "colorScheme": "dark",
+    "counts": {
+      "errors": 6,
+      "warnings": 7,
+      "byType": {
+        "tap-target": 7,
+        "offscreen": 1,
+        "zero-size": 5
+      }
+    },
+    "errors": [
+      {
+        "type": "tap-target",
+        "message": "Hit area 152×14px < 24px minimum",
+        "selector": "#top > div.wrap > a.scrollcue"
+      },
+      {
+        "type": "tap-target",
+        "message": "Hit area 114×16px < 24px minimum",
+        "selector": "div.wrap > div.fgrid > nav.flinks > a:nth-of-type(1)"
+      },
+      {
+        "type": "tap-target",
+        "message": "Hit area 114×16px < 24px minimum",
+        "selector": "div.wrap > div.fgrid > nav.flinks > a:nth-of-type(2)"
+      },
+      {
+        "type": "tap-target",
+        "message": "Hit area 114×16px < 24px minimum",
+        "selector": "div.wrap > div.fgrid > nav.flinks > a:nth-of-type(3)"
+      },
+      {
+        "type": "tap-target",
+        "message": "Hit area 114×16px < 24px minimum",
+        "selector": "div.wrap > div.fgrid > nav.flinks > a:nth-of-type(4)"
+      },
+      {
+        "type": "offscreen",
+        "message": "Interactive element outside horizontal viewport (left -9999)",
+        "selector": "#page > a.skip"
+      }
+    ],
+    "warnings": [
+      {
+        "type": "tap-target",
+        "message": "Hit area 149×37px < 44px recommended",
+        "selector": "#page > a.skip"
+      },
+      {
+        "type": "tap-target",
+        "message": "Hit area 93×29px < 44px recommended",
+        "selector": "#site-header > div.navbar > a.mark"
+      },
+      {
+        "type": "zero-size",
+        "message": "Interactive element has zero rendered size",
+        "selector": "#nav-menu > a:nth-of-type(1)"
+      },
+      {
+        "type": "zero-size",
+        "message": "Interactive element has zero rendered size",
+        "selector": "#nav-menu > a:nth-of-type(2)"
+      },
+      {
+        "type": "zero-size",
+        "message": "Interactive element has zero rendered size",
+        "selector": "#nav-menu > a:nth-of-type(3)"
+      },
+      {
+        "type": "zero-size",
+        "message": "Interactive element has zero rendered size",
+        "selector": "#nav-menu > a:nth-of-type(4)"
+      },
+      {
+        "type": "zero-size",
+        "message": "Interactive element has zero rendered size",
+        "selector": "#nav-menu > a.gh:nth-of-type(5)"
+      }
+    ],
+    "consoleErrors": []
+  },
+  "768": {
+    "passed": false,
+    "url": "file:///Users/howiiee/.claude/skills/ui-craft-workspace/sandman-site/build/outputs/index.html",
+    "viewport": {
+      "width": 768,
+      "height": 1024
+    },
+    "colorScheme": "dark",
+    "counts": {
+      "errors": 1,
+      "warnings": 0,
+      "byType": {
+        "offscreen": 1
+      }
+    },
+    "errors": [
+      {
+        "type": "offscreen",
+        "message": "Interactive element outside horizontal viewport (left -9999)",
+        "selector": "#page > a.skip"
+      }
+    ],
+    "warnings": [],
+    "consoleErrors": []
+  },
+  "1280": {
+    "passed": false,
+    "url": "file:///Users/howiiee/.claude/skills/ui-craft-workspace/sandman-site/build/outputs/index.html",
+    "viewport": {
+      "width": 1280,
+      "height": 900
+    },
+    "colorScheme": "dark",
+    "counts": {
+      "errors": 1,
+      "warnings": 0,
+      "byType": {
+        "offscreen": 1
+      }
+    },
+    "errors": [
+      {
+        "type": "offscreen",
+        "message": "Interactive element outside horizontal viewport (left -9999)",
+        "selector": "#page > a.skip"
+      }
+    ],
+    "warnings": [],
+    "consoleErrors": []
+  }
+}

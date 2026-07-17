@@ -1,0 +1,852 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SANDMAN — it builds while you sleep</title>
+<meta name="description" content="SANDMAN orchestrates a team of AI agents through a gated pipeline — plan, review, build, ship, deploy — and refuses its own work until an oracle it did not write says otherwise.">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230A0B10'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%237BEFB2'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%237BEFB2' stroke-opacity='0.4'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Instrument+Sans:wght@400;500&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#0A0B10; --surface:#12141C; --line:#2A2E3D; --line-lit:#6E7690;
+    --text:#E8EAF2; --text-secondary:#A8AEC2; --text-muted:#7E8499;
+    --phosphor:#7BEFB2; --phosphor-fg:#0A0B10;
+    --mono:"Geist Mono",ui-monospace,monospace; --body:"Instrument Sans",system-ui,sans-serif;
+    --display:"Newsreader",Georgia,serif;
+    --maxw:1120px; --measure:60ch;
+    --s1:8px; --s2:16px; --s3:24px; --s4:32px; --s5:48px; --s6:64px; --s7:96px; --s8:128px;
+    --header-h:60px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  html.canvas-on{scroll-behavior:auto}
+  @media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+  body{background:var(--void);color:var(--text);font:400 16px/1.6 var(--body);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow-x:hidden}
+  ::selection{background:var(--phosphor);color:var(--phosphor-fg)}
+  a{color:inherit}
+  :focus-visible{outline:2px solid var(--phosphor);outline-offset:3px;border-radius:2px}
+  img,svg{max-width:100%}
+
+  /* scrollbar */
+  html{scrollbar-color:var(--line-lit) var(--void)}
+  ::-webkit-scrollbar{width:11px;height:11px}
+  ::-webkit-scrollbar-track{background:var(--void)}
+  ::-webkit-scrollbar-thumb{background:var(--line);border:3px solid var(--void);border-radius:6px}
+  ::-webkit-scrollbar-thumb:hover{background:var(--line-lit)}
+
+  /* ---------- backdrops (decorative, behind DOM) ---------- */
+  .backdrop{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+  #weave{display:none}
+  html.canvas-on #weave{display:block}
+  html.canvas-on .static-weave{display:none}
+  .static-weave{display:block}
+  .static-weave svg{position:absolute;inset:0;width:100%;height:100%}
+
+  /* night rail (decorative) */
+  .night-rail{position:fixed;top:0;right:14px;height:100vh;width:2px;z-index:2;
+    display:flex;flex-direction:column;justify-content:space-between;align-items:center;
+    padding:calc(var(--header-h) + 16px) 0 24px;pointer-events:none}
+  .night-rail::before{content:"";position:absolute;top:calc(var(--header-h) + 16px);bottom:24px;
+    left:50%;transform:translateX(-50%);width:1px;background:var(--line)}
+  .night-rail .tick{position:relative;font:400 10px var(--mono);letter-spacing:.14em;
+    color:var(--text-muted);text-transform:uppercase;writing-mode:vertical-rl;
+    background:var(--void);padding:6px 0}
+  .night-rail .bead{position:absolute;left:50%;top:calc(var(--header-h) + 16px);width:5px;height:5px;
+    margin-left:-2.5px;border-radius:50%;background:var(--phosphor);
+    box-shadow:0 0 8px var(--phosphor);transition:top .1s linear}
+  @media (max-width:900px){.night-rail{display:none}}
+
+  /* ---------- layout ---------- */
+  .wrap{position:relative;z-index:1;max-width:var(--maxw);margin:0 auto;padding:0 24px}
+  main{position:relative;z-index:1}
+  section{position:relative}
+  .skip{position:fixed;left:8px;top:-100px;z-index:100;background:var(--phosphor);
+    color:var(--phosphor-fg);padding:14px 18px;font:500 13px var(--mono);
+    text-decoration:none;border-radius:2px;transition:top .15s ease}
+  .skip:focus{top:8px}
+
+  /* ---------- header / nav ---------- */
+  header.site{position:fixed;top:0;left:0;right:0;z-index:40;
+    background:color-mix(in srgb, var(--void) 82%, transparent);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line)}
+  .navbar{max-width:var(--maxw);margin:0 auto;padding:0 24px;height:var(--header-h);
+    display:flex;align-items:center;justify-content:space-between;gap:16px}
+  .mark{font:500 13px var(--mono);letter-spacing:.16em;text-decoration:none;color:var(--text);
+    display:inline-flex;align-items:center;gap:8px;white-space:nowrap;padding:12px 4px;min-height:44px}
+  .mark .dot{width:8px;height:8px;border-radius:50%;background:var(--phosphor);
+    box-shadow:0 0 8px var(--phosphor)}
+  .nav-toggle{display:none;background:none;border:1px solid var(--line);color:var(--text-secondary);
+    font:500 11px var(--mono);letter-spacing:.12em;text-transform:uppercase;
+    padding:10px 14px;border-radius:2px;cursor:pointer;min-height:44px}
+  .nav-toggle:hover{border-color:var(--line-lit);color:var(--text)}
+  nav.primary{display:flex;align-items:center;gap:4px}
+  nav.primary a{font:400 12px var(--mono);color:var(--text-secondary);text-decoration:none;
+    letter-spacing:.1em;text-transform:uppercase;padding:14px 12px;border-radius:2px;
+    transition:color .18s ease}
+  nav.primary a:hover{color:var(--text)}
+  nav.primary a.gh{color:var(--text);border:1px solid var(--line)}
+  nav.primary a.gh:hover{border-color:var(--phosphor);color:var(--phosphor)}
+
+  /* no-JS floor at narrow widths: the .collapsed dropdown is JS-only, so without JS
+     the links must wrap instead of overflowing off the edge. */
+  @media (max-width:720px){
+    .navbar{flex-wrap:wrap;height:auto;min-height:var(--header-h);padding-top:8px;padding-bottom:8px}
+    nav.primary{flex-wrap:wrap;row-gap:0}
+  }
+  header.site.collapsed .nav-toggle{display:inline-flex}
+  header.site.collapsed .navbar{height:var(--header-h);min-height:var(--header-h);
+    flex-wrap:nowrap;padding-top:0;padding-bottom:0}
+  header.site.collapsed nav.primary{position:absolute;top:var(--header-h);right:0;left:0;
+    flex-direction:column;align-items:stretch;gap:0;background:var(--surface);
+    border-bottom:1px solid var(--line);padding:8px 24px 16px;
+    max-width:100%;display:none}
+  header.site.collapsed.open nav.primary{display:flex}
+  header.site.collapsed nav.primary a{padding:16px 8px;border-bottom:1px solid var(--line);
+    text-align:left}
+  header.site.collapsed nav.primary a.gh{border:none;border-bottom:1px solid var(--line);
+    margin-top:0;color:var(--phosphor)}
+
+  /* ---------- typographic primitives ---------- */
+  .eyebrow{font:400 12px var(--mono);color:var(--text-muted);letter-spacing:.2em;
+    text-transform:uppercase;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .eyebrow .hr{flex:0 0 28px;height:1px;background:var(--line-lit)}
+  h1,h2,h3{font-family:var(--display);font-weight:400;letter-spacing:-.01em;line-height:1.1}
+  h1 em,h2 em,h3 em{font-style:italic;color:var(--text-secondary)}
+  .lead{color:var(--text-secondary);max-width:var(--measure)}
+  .mono{font-family:var(--mono)}
+  .ph{color:var(--phosphor)}
+
+  section.scene{scroll-margin-top:calc(var(--header-h) + 8px)}
+
+  /* ---------- HERO ---------- */
+  #top{min-height:100vh;display:flex;flex-direction:column;justify-content:center;
+    padding:calc(var(--header-h) + 64px) 0 64px}
+  #top .eyebrow{margin-bottom:24px}
+  h1{font-size:clamp(46px,9vw,104px);line-height:1.03;max-width:14ch;
+    font-optical-sizing:auto}
+  #top .lead{margin-top:32px;font-size:clamp(17px,2.1vw,21px);line-height:1.55}
+  .phases{display:flex;gap:8px 20px;flex-wrap:wrap;margin-top:56px;align-items:center}
+  .phases span{font:400 11px var(--mono);color:var(--text-muted);letter-spacing:.14em;
+    white-space:nowrap;display:inline-flex;align-items:center;gap:8px}
+  .phases span::before{content:"";width:4px;height:4px;border-radius:50%;background:var(--line-lit)}
+  .phases span.on{color:var(--phosphor)}
+  .phases span.on::before{background:var(--phosphor);box-shadow:0 0 6px var(--phosphor)}
+  .scrollcue{margin-top:44px;font:400 11px var(--mono);color:var(--text-muted);
+    letter-spacing:.16em;text-transform:uppercase;display:inline-flex;align-items:center;gap:10px;
+    text-decoration:none;padding:14px 2px;min-height:44px}
+  .scrollcue:hover{color:var(--text-secondary)}
+  .scrollcue .arw{display:inline-block;animation:bob 2.4s ease-in-out infinite}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
+  @media (prefers-reduced-motion: reduce){.scrollcue .arw{animation:none}}
+
+  /* ---------- generic section ---------- */
+  .scene{padding:112px 0}
+  .scene-head{max-width:720px}
+  .scene-head .eyebrow{margin-bottom:24px}
+  .scene h2{font-size:clamp(32px,5vw,56px);max-width:18ch}
+  .scene-head .lead{margin-top:24px;font-size:18px}
+
+  /* pipeline lanes */
+  .lanes{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;
+    margin-top:56px;background:var(--line);border:1px solid var(--line)}
+  .lane{background:var(--void);padding:24px 20px;min-height:150px;display:flex;
+    flex-direction:column;justify-content:space-between;gap:16px}
+  .lane .n{font:500 11px var(--mono);color:var(--text-muted);letter-spacing:.16em}
+  .lane .nm{font-family:var(--display);font-size:20px;line-height:1.15}
+  .lane .d{font-size:13px;color:var(--text-secondary);line-height:1.5}
+  .lane.gate{background:var(--surface)}
+  .lane.gate .n{color:var(--text-secondary)}
+
+  /* two-column feature */
+  .split{display:grid;grid-template-columns:1.1fr .9fr;gap:56px;margin-top:56px;align-items:start}
+  @media (max-width:820px){.split{grid-template-columns:1fr;gap:40px}}
+  .split .body p{color:var(--text-secondary);max-width:var(--measure);margin-top:16px}
+  .split .body p:first-child{margin-top:0}
+  .split .body p strong{color:var(--text);font-weight:500}
+
+  .card{background:var(--surface);border:1px solid var(--line);padding:28px}
+  .card h3{font-size:22px;margin-bottom:6px}
+  .card .cap{font:400 11px var(--mono);color:var(--text-muted);letter-spacing:.14em;
+    text-transform:uppercase;margin-bottom:20px}
+  .napkin{list-style:none;display:flex;flex-direction:column}
+  .napkin li{display:flex;gap:14px;align-items:baseline;padding:12px 0;
+    border-top:1px solid var(--line);font-size:14px;color:var(--text-secondary)}
+  .napkin li:first-child{border-top:none;padding-top:0}
+  .napkin li b{font:500 11px var(--mono);color:var(--text-muted);letter-spacing:.1em;
+    min-width:26px;flex:0 0 auto}
+  .card .statline{display:flex;justify-content:space-between;align-items:baseline;
+    border-top:1px solid var(--line);margin-top:20px;padding-top:16px;
+    font:400 12px var(--mono);color:var(--text-muted);letter-spacing:.06em}
+  .card .statline b{color:var(--phosphor);font-weight:500;font-size:15px}
+
+  .refuse{margin-top:32px;border-left:2px solid var(--line-lit);padding:4px 0 4px 24px}
+  .refuse p{color:var(--text-secondary);max-width:var(--measure)}
+  .refuse .tag{font:500 11px var(--mono);letter-spacing:.16em;color:var(--text-secondary);
+    text-transform:uppercase;display:block;margin-bottom:8px}
+
+  /* evidence */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+    gap:1px;background:var(--line);border:1px solid var(--line);margin-top:56px}
+  .stat{background:var(--void);padding:28px 24px;display:flex;flex-direction:column;gap:10px}
+  .stat .k{font:400 11px var(--mono);color:var(--text-muted);letter-spacing:.14em;
+    text-transform:uppercase;line-height:1.4}
+  .stat .v{font-family:var(--display);font-size:clamp(34px,4.4vw,48px);line-height:1;
+    color:var(--text)}
+  .stat .v.lit{color:var(--phosphor)}
+  .stat .sub{font:400 12px var(--mono);color:var(--text-secondary);letter-spacing:.04em}
+
+  .capstone{margin-top:64px}
+  .capstone .cap-h{display:flex;align-items:baseline;justify-content:space-between;
+    gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:16px}
+  .capstone .cap-h h3{font-size:24px}
+  .capstone .cap-h .meta{font:400 12px var(--mono);color:var(--text-muted);letter-spacing:.08em}
+  .tblwrap{overflow-x:auto;margin-top:8px}
+  table.dag{width:100%;border-collapse:collapse;font-size:14px;min-width:520px}
+  table.dag caption{text-align:left;font:400 12px var(--mono);color:var(--text-muted);
+    letter-spacing:.1em;padding:16px 0 8px;text-transform:uppercase}
+  table.dag th,table.dag td{text-align:left;padding:14px 16px 14px 0;
+    border-bottom:1px solid var(--line);vertical-align:top}
+  table.dag thead th{font:500 11px var(--mono);color:var(--text-muted);letter-spacing:.12em;
+    text-transform:uppercase;font-weight:500}
+  table.dag td .task{font-family:var(--mono);color:var(--text)}
+  table.dag td .gt{color:var(--text-secondary)}
+  table.dag td.w{font-family:var(--mono);color:var(--text-muted)}
+  table.dag td .dom{font:400 11px var(--mono);color:var(--text-muted);letter-spacing:.1em;
+    text-transform:uppercase}
+  table.dag tfoot td{border-bottom:none;padding-top:18px;font-family:var(--mono);
+    color:var(--text);font-size:13px}
+  table.dag tfoot td .tot{color:var(--phosphor)}
+
+  /* start */
+  #start .lead{margin-top:24px;font-size:18px}
+  .terminal{margin-top:48px;background:var(--surface);border:1px solid var(--line);
+    max-width:760px;border-radius:2px;overflow:hidden}
+  .terminal .bar{display:flex;align-items:center;gap:8px;padding:12px 16px;
+    border-bottom:1px solid var(--line)}
+  .terminal .bar .lbl{font:400 11px var(--mono);color:var(--text-muted);letter-spacing:.12em;
+    margin-left:6px}
+  .terminal .bar i{width:10px;height:10px;border-radius:50%;background:var(--line-lit);display:block}
+  .terminal pre{padding:24px 20px;overflow-x:auto;font:400 13px/1.85 var(--mono);
+    color:var(--text-secondary)}
+  .terminal pre .p{color:var(--text-muted)}
+  .terminal pre .c{color:var(--text)}
+  .terminal pre .ok{color:var(--phosphor)}
+  .cta-row{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-top:48px}
+  .cta{display:inline-flex;align-items:center;gap:10px;background:var(--phosphor);
+    color:var(--phosphor-fg);font:500 13px var(--mono);letter-spacing:.08em;
+    text-transform:uppercase;text-decoration:none;padding:16px 24px;border-radius:2px;
+    min-height:44px;transition:transform .18s ease,box-shadow .18s ease}
+  .cta:hover{transform:translateY(-1px);box-shadow:0 0 24px -4px var(--phosphor)}
+  .cta:focus-visible{outline-offset:4px}
+  .cta.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+  .cta.ghost:hover{border-color:var(--line-lit);box-shadow:none;color:var(--text)}
+
+  /* footer */
+  footer{border-top:1px solid var(--line);margin-top:64px;padding:56px 0 72px;position:relative;z-index:1}
+  footer .fgrid{display:flex;justify-content:space-between;gap:32px;flex-wrap:wrap;align-items:flex-start}
+  footer .fnote{max-width:46ch;color:var(--text-muted);font-size:13px;line-height:1.6}
+  footer .fnote a{color:var(--text-secondary);text-decoration:underline;
+    text-underline-offset:3px;text-decoration-color:var(--line-lit)}
+  footer .fnote a:hover{color:var(--phosphor);text-decoration-color:var(--phosphor)}
+  footer .fmark{font:500 12px var(--mono);letter-spacing:.16em;color:var(--text-secondary)}
+  footer .flinks{display:flex;flex-direction:column;gap:2px;font:400 12px var(--mono);letter-spacing:.08em}
+  footer .flinks a{color:var(--text-secondary);text-decoration:none;padding:12px 2px;min-height:44px;display:inline-flex;align-items:center}
+  footer .flinks a:hover{color:var(--phosphor)}
+
+  /* tablet: keep grids from orphaning a lone cell */
+  @media (min-width:561px) and (max-width:900px){
+    .lanes{grid-template-columns:repeat(3,1fr)}   /* 3 + 3, not 4 + 2 */
+    .stats{grid-template-columns:repeat(2,1fr)}   /* clean 2 x 2, not 3 + 1 */
+  }
+  @media (max-width:560px){
+    .scene{padding:80px 0}
+    #top{padding-top:calc(var(--header-h) + 40px)}
+    .phases{margin-top:40px}
+    .lanes{grid-template-columns:repeat(2,1fr)}
+    .stats{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body id="page">
+<a class="skip" href="#main">Skip to content</a>
+
+<!-- ===== decorative backdrops ===== -->
+<canvas id="weave" class="backdrop" aria-hidden="true"></canvas>
+<div class="static-weave backdrop" aria-hidden="true">
+  <!-- Static poster of the finished weave: the real Showdown capstone DAG.
+       Shown when JS/motion is off; the canvas replaces it when active. -->
+  <svg viewBox="0 0 1200 760" preserveAspectRatio="xMidYMid slice">
+    <g stroke="#2A2E3D" fill="none" stroke-width="1">
+      <path d="M120 200 C 420 140 780 150 1080 210" stroke-dasharray="2 8"/>
+      <path d="M90 420 C 430 360 820 380 1120 430" stroke-dasharray="2 10"/>
+      <path d="M150 600 C 470 560 760 560 1050 600" stroke-dasharray="2 8"/>
+    </g>
+    <!-- warp residue -->
+    <g stroke="#2A2E3D" fill="none" stroke-width="1" opacity="0.5">
+      <path d="M300 120 C 292 300 308 470 300 650"/>
+      <path d="M470 120 C 478 300 462 470 470 650"/>
+      <path d="M640 120 C 632 300 648 470 640 650"/>
+    </g>
+    <!-- woven Showdown DAG threads -->
+    <g stroke="#6E7690" fill="none" stroke-width="1.25">
+      <path d="M360 300 C 470 302 500 378 600 380"/>
+      <path d="M360 380 C 470 378 500 380 600 380"/>
+      <path d="M360 460 C 470 458 500 384 600 380"/>
+      <path d="M632 380 C 740 380 800 380 852 380"/>
+    </g>
+    <g fill="#6E7690">
+      <circle cx="360" cy="300" r="3.5"/><circle cx="360" cy="380" r="3.5"/>
+      <circle cx="360" cy="460" r="3.5"/><circle cx="616" cy="380" r="4"/>
+    </g>
+    <circle cx="868" cy="380" r="4.5" fill="#7BEFB2"/>
+    <circle cx="868" cy="380" r="12" fill="none" stroke="#7BEFB2" stroke-opacity="0.35"/>
+  </svg>
+</div>
+
+<!-- night rail -->
+<div class="night-rail" aria-hidden="true">
+  <span class="bead" id="rail-bead" style="top:76px"></span>
+  <span class="tick">Dusk</span>
+  <span class="tick">Deep&nbsp;night</span>
+  <span class="tick">Daybreak</span>
+</div>
+
+<!-- ===== header ===== -->
+<header class="site" id="site-header" data-allow-overlap>
+  <div class="navbar">
+    <a class="mark" href="#top"><span class="dot" aria-hidden="true"></span>SANDMAN</a>
+    <button class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav-menu">Menu</button>
+    <nav class="primary" id="nav-menu" aria-label="Primary">
+      <a href="#pipeline">Pipeline</a>
+      <a href="#oracle">Oracle</a>
+      <a href="#evidence">Evidence</a>
+      <a href="#start">Get started</a>
+      <a class="gh" href="https://github.com/Howard-Jek/sandman">GitHub&nbsp;↗</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- ===== HERO / dusk ===== -->
+  <section id="top" class="scene" aria-labelledby="hero-h">
+    <div class="wrap">
+      <p class="eyebrow"><span class="hr" aria-hidden="true"></span>Autonomous agent teams · dusk</p>
+      <h1 id="hero-h">It builds while you <em>sleep</em>.</h1>
+      <p class="lead">SANDMAN orchestrates a team of AI agents through a gated pipeline —
+        plan, review, build, ship, deploy — and refuses its own work until an oracle it did
+        not write says otherwise. It sprinkles ideas; you wake up to shipped code.</p>
+      <div class="phases" role="list" aria-label="Pipeline phases">
+        <span class="on" role="listitem">P0 Plan</span>
+        <span role="listitem">P1 Review</span>
+        <span role="listitem">P2 Build</span>
+        <span role="listitem">P3 Test</span>
+        <span role="listitem">P4 Ship</span>
+        <span role="listitem">P5 Deploy</span>
+      </div>
+      <a class="scrollcue" href="#pipeline">the weave begins <span class="arw" aria-hidden="true">↓</span></a>
+    </div>
+  </section>
+
+  <!-- ===== PIPELINE / early night ===== -->
+  <section id="pipeline" class="scene" aria-labelledby="pipe-h">
+    <div class="wrap">
+      <div class="scene-head">
+        <p class="eyebrow"><span class="hr" aria-hidden="true"></span>01 / the night shift · 23:00</p>
+        <h2 id="pipe-h">Five hands pull one thread.</h2>
+        <p class="lead">A planner decomposes the brief into a task graph, then a team of metered
+          builders works it in concurrent waves — each on your key, each under a spend cap, each
+          streaming its actions to a live dashboard. One command starts the night.</p>
+      </div>
+      <div class="lanes">
+        <div class="lane"><span class="n">P0</span><span class="nm">Plan</span><span class="d">Decompose the brief into a DAG; draft an oracle per task; wait for human approval.</span></div>
+        <div class="lane"><span class="n">P1</span><span class="nm">Review</span><span class="d">Weak-oracle warnings surfaced before a cent is spent. The plan is the cheap gate.</span></div>
+        <div class="lane"><span class="n">P2</span><span class="nm">Build</span><span class="d">Concurrent waves of sandboxed builders in isolated worktrees, per-builder budget.</span></div>
+        <div class="lane gate"><span class="n">P3 · gate</span><span class="nm">Test</span><span class="d">The builder must satisfy an oracle it cannot weaken. A held-out check it never saw confirms it.</span></div>
+        <div class="lane"><span class="n">P4</span><span class="nm">Ship</span><span class="d">One command opens a real review PR on the built trunk, with the full audit log attached.</span></div>
+        <div class="lane gate"><span class="n">P5 · gate</span><span class="nm">Deploy</span><span class="d">A hash-anchored, dry-run-checked deploy that executes only on explicit human approval.</span></div>
+      </div>
+      <div class="refuse">
+        <span class="tag">The governing law</span>
+        <p>Autonomy is bounded by verifiability. Where a task has a cheap, objective, ungameable
+          oracle, the loop runs it to green unattended. Where judgment is required — is this UX
+          good, is this production change safe — it stops at a human gate. No referee, no team.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== ORACLE FORGE / deep night ===== -->
+  <section id="oracle" class="scene" aria-labelledby="or-h">
+    <div class="wrap">
+      <div class="scene-head">
+        <p class="eyebrow"><span class="hr" aria-hidden="true"></span>02 / oracle forge · 02:14</p>
+        <h2 id="or-h">It writes the test it must pass — then makes it <em>harder</em>.</h2>
+        <p class="lead">You never write test code. You write a Napkin — six plain-English prompts.
+          SANDMAN translates it into a technical oracle, drafts it to a strength floor, then a
+          Nightmare/Warden adversarial layer hardens it into something a builder cannot game.</p>
+      </div>
+      <div class="split">
+        <div class="body">
+          <p><strong>The oracle is the product.</strong> Model capability, the agent loop, the CLI —
+            all copyable. What is hard-won is turning a vague brief into a strong, ungameable
+            fitness function, and refusing to reward code that only looks right.</p>
+          <p>The forge sets a mutation-tested strength floor; the Nightmare/Warden layer probes for
+            valid-but-weak oracles and seals the gaps. Across a five-gap-class evaluation of
+            deliberately weak oracles, held-out kill-rate lifted from 0.00 to roughly 0.96.</p>
+          <p>And when a builder returns green-but-wrong, the gate says no. In a real brownfield run
+            the builder returned a passing status for an unknown input; the gate <strong>refused the
+            build four times and never shipped it.</strong> REFUSED is not a failure of the system —
+            it is the system.</p>
+          <div class="refuse">
+            <span class="tag">Refused, on purpose</span>
+            <p>A held-out check the builder never sees runs beside the gate. When it disagrees with
+              a “pass,” the reward-hack is caught — every time it has occurred.</p>
+          </div>
+        </div>
+        <div class="card" aria-label="The Napkin — six prompts">
+          <p class="cap">docs/NAPKIN.md</p>
+          <h3>The Napkin</h3>
+          <ol class="napkin">
+            <li><b>01</b><span>Wish — what should exist by morning.</span></li>
+            <li><b>02</b><span>Show me it works — the demo that proves it.</span></li>
+            <li><b>03</b><span>For real — a concrete worked example.</span></li>
+            <li><b>04</b><span>Never allowed — the things it must reject.</span></li>
+            <li><b>05</b><span>Lazy genie 🧞 — the trap a shortcut would fall into.</span></li>
+            <li><b>06</b><span>Vibe — how it should feel to use.</span></li>
+          </ol>
+          <div class="statline"><span>oracle seal-rate</span><b>0.96</b></div>
+          <div class="statline"><span>Nightmare / Warden</span><span>25 runs</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== EVIDENCE / pre-dawn ===== -->
+  <section id="evidence" class="scene" aria-labelledby="ev-h">
+    <div class="wrap">
+      <div class="scene-head">
+        <p class="eyebrow"><span class="hr" aria-hidden="true"></span>03 / the morning tapestry · 04:40</p>
+        <h2 id="ev-h">By morning, the whole stack — and the <em>receipt</em>.</h2>
+        <p class="lead">Every claim here has a baseline and an independent held-out check the builder
+          never saw. “Oracle passed” alone is not evidence. The full artifacts live under
+          <span class="mono">benchmarks/</span> and <span class="mono">evals/</span> in the repo.</p>
+      </div>
+
+      <div class="stats" aria-label="Measured results">
+        <div class="stat">
+          <span class="k">Held-out correct · dev</span>
+          <span class="v lit">23 / 24</span>
+          <span class="sub">raw Claude Code: 10 / 24</span>
+        </div>
+        <div class="stat">
+          <span class="k">Oracle seal-rate</span>
+          <span class="v">0.96</span>
+          <span class="sub">Nightmare/Warden, 25 runs</span>
+        </div>
+        <div class="stat">
+          <span class="k">UI visual-quality judge</span>
+          <span class="v">0.78</span>
+          <span class="sub">vs 0.52 one-shot, same judge</span>
+        </div>
+        <div class="stat">
+          <span class="k">Offline test suite</span>
+          <span class="v">600+</span>
+          <span class="sub">all offline · no API calls</span>
+        </div>
+      </div>
+
+      <div class="capstone">
+        <div class="cap-h">
+          <h3>Capstone: “Showdown” — one brief, the whole stack.</h3>
+          <span class="meta mono">built &amp; deployed for real · scripts/capstone_showdown.py</span>
+        </div>
+        <div class="tblwrap">
+          <table class="dag">
+            <caption>The real five-task, three-wave DAG SANDMAN assembled</caption>
+            <thead>
+              <tr><th scope="col">Task</th><th scope="col">Wave</th><th scope="col">Domain</th><th scope="col">Held-out gate</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><span class="task">elo.py</span></td><td class="w">0</td><td><span class="dom">dev</span></td><td><span class="gt">pytest test_elo.py</span></td></tr>
+              <tr><td><span class="task">db.py</span></td><td class="w">0</td><td><span class="dom">dev</span></td><td><span class="gt">pytest test_db.py</span></td></tr>
+              <tr><td><span class="task">infra</span></td><td class="w">0</td><td><span class="dom">infra</span></td><td><span class="gt">docker compose config</span></td></tr>
+              <tr><td><span class="task">app.py</span></td><td class="w">1</td><td><span class="dom">dev</span></td><td><span class="gt">pytest test_app.py · TestClient</span></td></tr>
+              <tr><td><span class="task">static/index.html</span></td><td class="w">2</td><td><span class="dom">ui</span></td><td><span class="gt">behavior + visual + UX probes</span></td></tr>
+            </tbody>
+            <tfoot>
+              <tr><td colspan="4">night total <span class="tot">$1.84</span> &nbsp;·&nbsp; 5 / 5 tasks &nbsp;·&nbsp; 3 waves &nbsp;·&nbsp; then a real gated <span class="mono">docker compose up</span> with live smoke</td></tr>
+            </tfoot>
+          </table>
+        </div>
+        <div class="refuse" style="margin-top:40px">
+          <span class="tag">And one more receipt</span>
+          <p>“Moonlit Market,” a price-time-priority order-matching engine with its own data and UI:
+            6 / 6 tasks, $1.34 — the gate caught two real issues on the first run and refused them,
+            both fixed on a clean re-run. Cumulative live spend to produce all of the above: about $20,
+            metered, itemized per artifact.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== START / daybreak ===== -->
+  <section id="start" class="scene" aria-labelledby="st-h">
+    <div class="wrap">
+      <div class="scene-head">
+        <p class="eyebrow"><span class="hr" aria-hidden="true"></span>04 / daybreak · 06:41</p>
+        <h2 id="st-h">You slept. It <em>shipped</em>.</h2>
+        <p class="lead">One command runs the whole pipeline: the planner proposes a DAG and a draft
+          oracle per task, shows you the plan, and waits for your approval — then builds it while a
+          live dashboard opens in your browser.</p>
+      </div>
+      <div class="terminal" aria-label="Quickstart commands">
+        <div class="bar"><i aria-hidden="true"></i><i aria-hidden="true"></i><i aria-hidden="true"></i><span class="lbl">sandman — quickstart</span></div>
+        <pre><span class="p">$</span> <span class="c">sandman doctor</span>              <span class="p"># check Python, key, Claude Code CLI, gh</span>
+<span class="p">$</span> <span class="c">sandman "Build a tiny ISBN-13 toolkit: a checksum</span>
+<span class="c">  module, a formatter, and a CLI."</span>
+
+  plan <span class="ok">✓</span>  approve <span class="ok">✓</span>  wave 0 ▸ build ▸ gate ▸ <span class="ok">sealed</span></pre>
+      </div>
+      <div class="cta-row">
+        <a class="cta" href="https://github.com/Howard-Jek/sandman">Read the evidence <span aria-hidden="true">↗</span></a>
+        <a class="cta ghost" href="https://github.com/Howard-Jek/sandman/blob/main/STATE.md">State &amp; scorecard</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="fgrid">
+      <div>
+        <p class="fmark"><span aria-hidden="true">●</span>&nbsp;SANDMAN</p>
+        <p class="fnote" style="margin-top:16px">Sandboxed · Audited · Networked Delivery —
+          Metered, Autonomous Nodes. Every number on this page is drawn from the repository’s
+          <a href="https://github.com/Howard-Jek/sandman/blob/main/STATE.md">STATE.md</a> and
+          <a href="https://github.com/Howard-Jek/sandman/tree/main/benchmarks">benchmarks/</a>.
+          Verifiable, gated, auditable orchestration of test-specified work — not “build anything
+          from an idea.”</p>
+      </div>
+      <nav class="flinks" aria-label="Footer">
+        <a href="https://github.com/Howard-Jek/sandman">Repository ↗</a>
+        <a href="https://github.com/Howard-Jek/sandman/blob/main/STATE.md">STATE.md ↗</a>
+        <a href="https://github.com/Howard-Jek/sandman/blob/main/framework.md">framework.md ↗</a>
+        <a href="#top">Back to top ↑</a>
+      </nav>
+    </div>
+  </div>
+</footer>
+
+<!-- ===== libraries (progressive enhancement; page is complete without them) ===== -->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/SplitText.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
+<script>
+(function(){
+  "use strict";
+  var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- mobile nav (works with or without the rest of JS) ---------- */
+  (function nav(){
+    var header = document.getElementById("site-header");
+    var toggle = document.getElementById("nav-toggle");
+    var menu = document.getElementById("nav-menu");
+    if(!header||!toggle||!menu) return;
+    var mq = matchMedia("(max-width:720px)");
+    function close(){ header.classList.remove("open"); toggle.setAttribute("aria-expanded","false");
+      if(header.classList.contains("collapsed")) menu.setAttribute("aria-hidden","true"); }
+    function open(){ header.classList.add("open"); toggle.setAttribute("aria-expanded","true");
+      menu.removeAttribute("aria-hidden"); }
+    function sync(){
+      if(mq.matches){ header.classList.add("collapsed"); close(); }
+      else { header.classList.remove("collapsed","open"); toggle.setAttribute("aria-expanded","false");
+        menu.removeAttribute("aria-hidden"); }
+    }
+    toggle.addEventListener("click", function(){
+      if(header.classList.contains("open")) close(); else open();
+    });
+    menu.addEventListener("click", function(e){ if(e.target.closest("a")) close(); });
+    document.addEventListener("keydown", function(e){
+      if(e.key==="Escape" && header.classList.contains("open")){ close(); toggle.focus(); }
+    });
+    document.addEventListener("click", function(e){
+      if(header.classList.contains("open") && !header.contains(e.target)) close();
+    });
+    (mq.addEventListener?mq.addEventListener.bind(mq,"change"):mq.addListener.bind(mq))(sync);
+    sync();
+  })();
+
+  var hasGSAP = (typeof gsap!=="undefined" && typeof ScrollTrigger!=="undefined");
+  if(reduce || !hasGSAP){ return; } /* static weave stays; native scroll; page complete */
+
+  gsap.registerPlugin(ScrollTrigger);
+
+  /* ---------- smooth scroll (Lenis) — optional, guarded ---------- */
+  var lenis = null;
+  if(typeof Lenis!=="undefined"){
+    lenis = new Lenis({ duration:1.05, smoothWheel:true, wheelMultiplier:1, touchMultiplier:1.4 });
+    lenis.on("scroll", ScrollTrigger.update);
+    gsap.ticker.add(function(t){ lenis.raf(t*1000); });
+    gsap.ticker.lagSmoothing(0);
+    /* keep anchors correct (native jump + focus) */
+    document.querySelectorAll('a[href^="#"]').forEach(function(a){
+      a.addEventListener("click", function(e){
+        var id = a.getAttribute("href");
+        if(id==="#" || id.length<2) return;
+        var el = document.querySelector(id);
+        if(!el) return;
+        e.preventDefault();
+        lenis.scrollTo(el, { offset:-60 });
+        el.setAttribute("tabindex","-1");
+        el.focus({ preventScroll:true });
+        history.pushState(null,"",id);
+      });
+    });
+  }
+
+  /* ---------- hero headline reveal (guarded SplitText) ---------- */
+  try{
+    if(typeof SplitText!=="undefined"){
+      gsap.registerPlugin(SplitText);
+      var split = new SplitText("#hero-h", { type:"words" });
+      gsap.from(split.words, { yPercent:40, opacity:0, duration:0.9, ease:"power3.out", stagger:0.06, delay:0.1 });
+    }
+    gsap.from("#top .eyebrow, #top .lead, #top .phases, #top .scrollcue",
+      { y:16, opacity:0, duration:0.8, ease:"power2.out", stagger:0.08, delay:0.25 });
+  }catch(e){/* text is already visible in the DOM; nothing to recover */}
+
+  /* No per-section fade-reveals: the persistent woven canvas is the single
+     signature move, and sparse static DOM over it is the intended composition.
+     This also keeps all content unconditionally visible (no scroll-gated opacity). */
+
+  /* ================= the weave canvas ================= */
+  document.documentElement.classList.add("canvas-on");
+  var canvas = document.getElementById("weave");
+  var ctx = canvas.getContext("2d");
+  var W=0,H=0,DPR=1;
+
+  function resize(){
+    DPR = Math.min(window.devicePixelRatio||1, 2);
+    W = document.documentElement.clientWidth;
+    H = window.innerHeight;
+    canvas.width = Math.round(W*DPR);
+    canvas.height = Math.round(H*DPR);
+    canvas.style.width = W+"px";
+    canvas.style.height = H+"px";
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+
+  /* seeded field of dormant knots (stable across resizes) */
+  var rand=(function(){ var s=1337; return function(){ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; }; })();
+  var field=[]; for(var i=0;i<46;i++){ field.push({ x:rand(), y:rand(), ph:rand()*Math.PI*2, sp:0.4+rand()*0.7, r:1.4+rand()*1.8 }); }
+
+  /* final Showdown DAG in normalized [0,1] box coords */
+  var NODES = {
+    elo:  {nx:0.30, ny:0.30, seal:0.72},
+    db:   {nx:0.30, ny:0.50, seal:0.75},
+    infra:{nx:0.30, ny:0.70, seal:0.78},
+    app:  {nx:0.58, ny:0.50, seal:0.84},
+    ui:   {nx:0.82, ny:0.50, seal:0.90}
+  };
+  var EDGES = [["elo","app"],["db","app"],["infra","app"],["app","ui"]];
+  var refusalEdge = ["infra","app"]; /* the thread that bounces & re-weaves */
+
+  var COL_LINE="#2A2E3D", COL_LIT="#6E7690", COL_PH="#7BEFB2";
+  function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+  function ph(p,a,b){ return clamp((p-a)/(b-a),0,1); }
+  function ease(t){ return t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2; }
+
+  var progress=0;
+  ScrollTrigger.create({
+    trigger:"#main", start:"top top", end:"bottom bottom", scrub:true,
+    onUpdate:function(self){ progress=self.progress; }
+  });
+
+  /* draw one wavering thread from A to B, up to fraction frac */
+  function thread(ax,ay,bx,by,frac,amp,phase,col,width,alpha,dash){
+    if(frac<=0||alpha<=0) return;
+    var dx=bx-ax, dy=by-ay, len=Math.hypot(dx,dy)||1;
+    var px=-dy/len, py=dx/len;
+    var steps=Math.max(10, Math.round(len/12));
+    ctx.save();
+    ctx.globalAlpha=alpha; ctx.strokeStyle=col; ctx.lineWidth=width;
+    ctx.lineCap="round";
+    if(dash) ctx.setLineDash(dash); else ctx.setLineDash([]);
+    ctx.beginPath();
+    var last=Math.floor(steps*frac);
+    for(var i=0;i<=last;i++){
+      var t=i/steps;
+      var env=Math.sin(t*Math.PI); /* zero at both knots => taut ends, slack middle */
+      var wv=Math.sin(t*Math.PI*2.4+phase)*amp*env;
+      var x=ax+dx*t+px*wv, y=ay+dy*t+py*wv;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+  function knot(x,y,r,col,alpha){
+    if(alpha<=0) return;
+    ctx.save(); ctx.globalAlpha=alpha; ctx.fillStyle=col;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); ctx.restore();
+  }
+  function pulse(x,y,r,alpha){
+    if(alpha<=0) return;
+    ctx.save(); ctx.globalAlpha=alpha; ctx.strokeStyle=COL_PH; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.stroke();
+    ctx.globalAlpha=alpha*0.9; ctx.fillStyle=COL_PH;
+    ctx.beginPath(); ctx.arc(x,y,3.2,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  function draw(time){
+    if(W===0) return;
+    ctx.clearRect(0,0,W,H);
+    var p=progress, t=time*0.001;
+
+    var padX=Math.max(48, W*0.14), padY=Math.max(90, H*0.20);
+    var bx0=padX, by0=padY, bw=W-padX*2, bh=H-padY*2;
+    var NX=function(nx){ return bx0+nx*bw; };
+    var NY=function(ny){ return by0+ny*bh; };
+    var cx=W*0.5, cy=H*0.46;
+
+    /* global night dim toward daybreak */
+    var morning=ph(p,0.90,1.0);
+    var gdim=1-0.55*morning;
+
+    /* ---- 1. dusk field: dormant breathing knots + orbiting dotted arcs ---- */
+    var fieldA=(1-ph(p,0.12,0.26))*gdim;
+    if(fieldA>0.01){
+      for(var i=0;i<field.length;i++){
+        var f=field[i];
+        var br=0.35+0.5*(0.5+0.5*Math.sin(t*f.sp+f.ph));
+        knot(f.x*W, f.y*H, f.r, COL_LINE, fieldA*br);
+      }
+      var arcA=fieldA*0.9;
+      ctx.save(); ctx.globalAlpha=arcA; ctx.strokeStyle=COL_LINE; ctx.lineWidth=1;
+      ctx.setLineDash([2,8]);
+      for(var a=0;a<3;a++){
+        var rr=Math.min(W,H)*(0.24+a*0.12);
+        var rot=t*(0.05+a*0.02)*(a%2?-1:1);
+        ctx.beginPath();
+        ctx.arc(cx,cy,rr, rot, rot+Math.PI*1.5);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]); ctx.restore();
+    }
+
+    /* ---- 2. warp threads (the loom: P0..P5) draw down, then recede ---- */
+    var warpUp=ph(p,0.15,0.32);
+    var warpFade=1-0.5*ph(p,0.62,0.86);
+    var warpA=warpUp*warpFade*gdim;
+    if(warpA>0.01){
+      var lanes=6;
+      for(var l=0;l<lanes;l++){
+        var lx=bx0+ (bw)*( (l+0.5)/lanes );
+        var frac=ph(p,0.15+l*0.015,0.34);
+        thread(lx, by0-10, lx, by0+bh+10, frac, 5+ (l%2?3:0), l*1.3, COL_LINE, 1, warpA*0.8);
+      }
+    }
+
+    /* ---- 3. weft crossings + gate seals + refusal bounce ---- */
+    var weftUp=ph(p,0.34,0.5);
+    var weftFade=1-0.52*ph(p,0.62,0.86);
+    var weftA=weftUp*weftFade*gdim;
+    if(weftA>0.01){
+      var wefts=3;
+      for(var m=0;m<wefts;m++){
+        var wy=by0 + bh*( (m+0.6)/(wefts+0.2) );
+        var wfrac=ph(p,0.34+m*0.03,0.56);
+        thread(bx0-10, wy, bx0+bw+10, wy, wfrac, 6, m*2.1+1, COL_LIT, 1, weftA*0.7);
+        /* a gate knot pulling tight on each weft */
+        var gx=bx0+bw*(0.34+m*0.16);
+        var gp=ph(p,0.44+m*0.04,0.5+m*0.04);
+        if(gp>0){
+          knot(gx,wy,2.5+2*ease(gp),COL_LIT,weftA);
+          var seal=ph(p,0.48+m*0.05,0.54+m*0.05);
+          if(seal>0 && seal<1) pulse(gx,wy, 6+18*seal, weftA*(1-seal));
+        }
+      }
+      /* refusal beat: a thread retracts then re-weaves near mid-night */
+      var rb=ph(p,0.5,0.62);
+      var rx0=bx0+bw*0.2, rx1=bx0+bw*0.5, ry=by0+bh*0.5;
+      var rfrac = rb<0.5 ? (1 - rb*2) : (rb-0.5)*2; /* out then back */
+      thread(rx0,ry,rx1,ry, clamp(rfrac,0.04,1), 7, 3.4, rb<0.5?COL_LIT:COL_PH, 1.2, weftA);
+    }
+
+    /* ---- 4. the tapestry: real Showdown DAG woven + sealed (the morning's weave) ---- */
+    var dagA=ph(p,0.58,0.72)*gdim;
+    if(dagA>0.01){
+      /* edges — two interlaced strands per edge so the capstone reads as woven, not drawn */
+      for(var e=0;e<EDGES.length;e++){
+        var A=NODES[EDGES[e][0]], B=NODES[EDGES[e][1]];
+        var start = A===NODES.app ? 0.74 : 0.6;
+        var efrac=ph(p, start, start+0.14);
+        thread(NX(A.nx),NY(A.ny),NX(B.nx),NY(B.ny), efrac, 5, e*1.7+0.5, COL_LIT, 1.3, dagA);
+        thread(NX(A.nx),NY(A.ny),NX(B.nx),NY(B.ny), efrac, 8.5, e*1.7+2.3, COL_LIT, 1, dagA*0.5);
+      }
+      /* nodes: a tied knot (cross-hatch) + core, then the phosphor seal ---- */
+      for(var k in NODES){
+        var n=NODES[k];
+        var na=ph(p, n.seal-0.14, n.seal-0.02);
+        var nx2=NX(n.nx), ny2=NY(n.ny);
+        if(na>0){
+          var kr=4+ease(na)*2.4;
+          ctx.save(); ctx.globalAlpha=dagA*na*0.85; ctx.strokeStyle=COL_LIT;
+          ctx.lineWidth=1; ctx.lineCap="round"; ctx.beginPath();
+          ctx.moveTo(nx2-kr,ny2-kr*0.55); ctx.lineTo(nx2+kr,ny2+kr*0.55);
+          ctx.moveTo(nx2-kr,ny2+kr*0.55); ctx.lineTo(nx2+kr,ny2-kr*0.55);
+          ctx.stroke(); ctx.restore();
+        }
+        knot(nx2,ny2, 3+ease(na)*1.5, COL_LIT, dagA*na);
+        var s=ph(p, n.seal, n.seal+0.05);
+        if(s>0){
+          knot(nx2,ny2,4.2, COL_PH, dagA*clamp(s*1.4,0,1));
+          if(s<1) pulse(nx2,ny2, 6+22*s, dagA*(1-s));
+        }
+      }
+    }
+
+    /* ---- 5. daybreak: one phosphor knot holds ---- */
+    if(morning>0.01){
+      var hx=NX(NODES.ui.nx), hy=NY(NODES.ui.ny);
+      var breath=0.6+0.4*(0.5+0.5*Math.sin(t*0.8));
+      knot(hx,hy,4.4, COL_PH, morning*breath);
+      pulse(hx,hy, 9, morning*0.25*breath);
+    }
+
+    /* night rail bead */
+    if(bead){
+      var top = 76 + (H - 120) * p;
+      bead.style.top = top + "px";
+    }
+  }
+
+  var bead=document.getElementById("rail-bead");
+  resize();
+  var running=true;
+  gsap.ticker.add(function(){ if(running) draw(performance.now()); });
+
+  /* debounced resize: re-measure geometry AND refresh ScrollTrigger (no stale geometry) */
+  var rt;
+  window.addEventListener("resize", function(){
+    clearTimeout(rt);
+    rt=setTimeout(function(){ resize(); ScrollTrigger.refresh(); }, 160);
+  });
+  document.addEventListener("visibilitychange", function(){
+    running = !document.hidden;
+    if(lenis){ if(document.hidden) lenis.stop(); else lenis.start(); }
+  });
+
+  /* expose a hook for offline scene captures (harmless, decorative) */
+  window.__setProgress=function(v){ progress=clamp(v,0,1); draw(performance.now()); };
+})();
+</script>
+</body>
+</html>
