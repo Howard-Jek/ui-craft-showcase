@@ -1,0 +1,1461 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hairline figure</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { color-scheme: light; --ground: #ffffff; --ink: #232327; --muted: #6f6f78; --line: #e0e0e4; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { color-scheme: dark; --ground: #08090a; --ink: #d0d6e0; --muted: #8a8c95; --line: #29292d; }
+  }
+  :root[data-theme="dark"] { color-scheme: dark; --ground: #08090a; --ink: #d0d6e0; --muted: #8a8c95; --line: #29292d; }
+  :root[data-theme="light"] { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px;
+    background: var(--ground); color: var(--ink);
+    font: 13px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased;
+  }
+  main { width: 100%; max-width: 640px; }
+  .plate { position: relative; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .tag, .label, output, button { font: 11px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: 0.02em; }
+  .tag { position: absolute; top: 12px; z-index: 1; color: var(--muted); pointer-events: none; }
+  #name { left: 14px; }
+  #read { right: 14px; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 14px; }
+  .label { color: var(--muted); }
+  input[type="range"] {
+    flex: 1 1 96px; min-width: 0; height: 32px; margin: 0; background: transparent; cursor: pointer;
+    -webkit-appearance: none; appearance: none;
+  }
+  input[type="range"]::-webkit-slider-runnable-track { height: 1px; background: var(--muted); }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 13px; height: 13px; margin-top: -6px; border-radius: 50%;
+    border: 1px solid var(--ink); background: var(--ground);
+  }
+  input[type="range"]::-moz-range-track { height: 1px; background: var(--muted); }
+  input[type="range"]::-moz-range-thumb { width: 11px; height: 11px; border-radius: 50%; border: 1px solid var(--ink); background: var(--ground); }
+  input[type="range"]:focus-visible, button:focus-visible { outline: 1.5px solid var(--ink); outline-offset: 2px; }
+  output { min-width: 4ch; text-align: right; font-variant-numeric: tabular-nums; }
+  button {
+    height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px;
+    background: transparent; color: var(--ink); cursor: pointer;
+  }
+  #play[aria-pressed="true"] { background: var(--ink); color: var(--ground); border-color: var(--ink); }
+  #means { margin: 14px 0 0; text-wrap: pretty; }
+  #rules { margin: 6px 0 0; line-height: 1.6; }
+  #error { margin: 12px 0 0; padding-left: 10px; border-left: 1px solid var(--ink); }
+</style>
+</head>
+<body>
+<main>
+  <div class="plate">
+    <span class="tag" id="name"></span>
+    <span class="tag" id="read"></span>
+    <div id="stage"></div>
+  </div>
+  <div class="controls">
+    <label class="label" for="intensity">intensity</label>
+    <input id="intensity" type="range" min="0" max="1" step="0.01" value="0.5">
+    <output id="value" for="intensity"></output>
+    <span class="label">theme</span>
+    <button id="theme" type="button" aria-label="Switch between the light and the dark theme"></button>
+    <span class="label">play</span>
+    <button id="play" type="button" aria-pressed="false">play</button>
+  </div>
+  <p id="means"></p>
+  <p id="rules" class="label"></p>
+  <p id="error" role="alert" hidden></p>
+</main>
+<script id="hl-kernel">
+/* hairline kernel sha256:3a19aa2640ba8c6c306184d05fddfbd4f3323a6ebd9217dd3cbb38e9db74991c */
+/*
+ * HL: everything a figure may call. Read this index; the code under it is the
+ * package's src/core, unchanged, and a figure should not need to read it.
+ *
+ * Every figure is drawn in a 400 × 320 viewBox. World space is x/y on the
+ * ground and z up. Plates are filled with the ground colour and painted back
+ * to front, so a nearer one covers a farther one: append in that order. At
+ * the default camera, Cam(45, 0.5, S), +x runs down to the right and +y down
+ * to the left, so the corner with the largest x and y is nearest the viewer:
+ * append by ascending x + y, from the far corner (smallest x and y) to it.
+ *
+ * Camera
+ *   Cam(azDeg, k, S)                       a camera: azimuth in degrees, k = sin(elevation) (0.5 is the 2:1 view), S = scale
+ *   fit(C, points, cx, cy)                 centres the box of [x, y, z] points on (cx, cy); call it once, before proj
+ *                                          it only centres, it never scales: choose S by trying values, with the most extreme pose in points.
+ *                                          The six figures use S 1.42 to 2.12; the boxes they fit come out 230 to 310 wide and 180 to 245 tall
+ *   proj(C)                                returns P(x, y, z), which gives [sx, sy]
+ *   unproj(C, sx, sy, z)                   the world [x, y] under a screen point, on the plane at height z
+ *   facing(C)                              returns front(sample): whether a ring sample faces the camera
+ * Rounded solids
+ *   rrect(u0, v0, u1, v1, r, n)            a rounded rectangle, as a ring of samples {u, v, nu, nv}
+ *   circ(R, n)                             a circle, as a ring
+ *   rings(x0, y0, x1, y1, r, b)            [ring, inner]: a rounded footprint and its crease ring, inset by b
+ *                                          r, the corner radius, is cut to half the shorter side. b, the crease's inset in world units
+ *                                          (0.6 to 2.2 in the figures), must stay under half the shorter side or the crease turns inside out
+ *   prism(P, front, ring, inner, z0, z1)   {sil, crease}: a solid standing from z0 to z1, as two path strings
+ *   ringAt(P, ring, z)                     the ring's points, projected at height z
+ *   run(ring, keep)                        the one cyclic run of samples that pass keep
+ *   hull(points)                           the convex hull of screen points
+ *   extremes(P, ring)                      [left, right, nearest] samples: where dashed drops fall from
+ *   fillet(points, radii, n)               rounds every vertex of a closed polygon; returns the new points
+ *                                          radii is an array, one radius per vertex, each cut to half its shorter edge; a single number gives NaN.
+ *                                          n is the steps round each corner, default 4: each vertex becomes n + 1 points
+ *   ghost(P, front, ring, z0, depth)       a reflection's path {d, y0, y1}; reflect() draws it for you
+ * Paths and numbers
+ *   poly(points)                           a closed path string
+ *   open(points)                           an open polyline string
+ *   seg(a, b)                              one segment between two screen points [sx, sy], as its own subpath; project world points with P first
+ *   clamp(v, a, b)
+ *   lerp(a, b, t)
+ *   rad(deg)
+ *   r2(n)                                  two decimals
+ * The continuous clock: one spring per moving number
+ *   spring(x, opts)                        at rest on x; write .t to retarget; opts {k, c, m, eps}, default k 100, c 18, m 1
+ *   stepS(sp, dt)                          advances by dt seconds; returns whether it is still moving
+ * The discrete clock: a 700ms tween on (.32, .72, 0, 1)
+ *   tween(v, dur)                          at rest on v; dur defaults to 700 (ms)
+ *   tset(tw, to, now, delay)               retargets from where it is, after delay ms: the stagger
+ *                                          the same target again does nothing, so calling it on every pointer move is safe
+ *   tval(tw, now)                          its value at now
+ *   tdone(tw, now)                         whether it has landed
+ *   bezier(x1, y1, x2, y2)                 a CSS cubic-bezier, as a function of progress
+ *   EASE_LIFT                              the lift curve itself
+ *   reducedMotion()                        true when the reader asked for less motion; springs and tweens already land at once
+ *   setReducedMotion(on)                   the loop's business, not a figure's
+ * Drawing
+ *   mk(tag, attrs, parent)                 one svg element: the only way a figure makes a node
+ *   solid(parent)                          {g, sil, cr}: a group holding a silhouette path and a crease path
+ *   put(solid, paths)                      writes prism()'s {sil, crease} into solid()'s {sil, cr}: sil into sil, crease into cr
+ *   flatDot(parent, C, r, cls)             a dot lying on the ground plane; cls is "dot", "dot m" or "dot off"
+ *   place(el, point)                       moves a dot or a circle to [sx, sy]
+ *   reflect(svg, parent, P, front, ring, z0, depth)   a fading mirror under a solid
+ *   fade(svg, y0, y1, a0)                  a vertical fade, as a mask; returns the value for a mask attribute
+ * Life
+ *   register(stage, tick)                  joins the one frame loop; tick(dt in seconds, now in ms) returns true to ask for another frame; gives {wake, unregister}
+ *   pointer(stage, handlers)               {move(point), down(point), leave()}, points in viewBox units; returns its disposer
+ *   disposer()                             {add, on, dispose}: collects tear-down, so destroy is bag.dispose
+ * The bench's business, not a figure's
+ *   css(lightDark)
+ *   inject(root)
+ *   tour(stage, stops, onStop)             an unseen pointer that walks the stops, [x, y] in viewBox units or null to leave, and gives way to a real one; onStop(i) on each arrival; returns {stop}
+ *   LAP                                    the default stops: a diamond around the centre, then a leave
+ *
+ * Classes, on path, polygon, ellipse and line. They are the whole palette; a
+ * figure sets no colour, width or fill of its own.
+ *     (none)   filled with the ground colour, medium stroke
+ *     sil      the silhouette's stroke        hi    the bright stroke: the only highlight
+ *     lo       the dim stroke                 nf    no fill        fo   fill only, no stroke
+ *     dash     a dashed guide
+ *     dot      a bright dot                   dot m   a medium dot     dot off   a dim dot
+ */
+var HL = (() => {
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // packages/hairline/src/core/kernel.ts
+  var kernel_exports = {};
+  __export(kernel_exports, {
+    Cam: () => Cam,
+    EASE_LIFT: () => EASE_LIFT,
+    LAP: () => LAP,
+    bezier: () => bezier,
+    circ: () => circ,
+    clamp: () => clamp,
+    css: () => css,
+    disposer: () => disposer,
+    extremes: () => extremes,
+    facing: () => facing,
+    fade: () => fade,
+    fillet: () => fillet,
+    fit: () => fit,
+    flatDot: () => flatDot,
+    ghost: () => ghost,
+    hull: () => hull,
+    inject: () => inject,
+    lerp: () => lerp,
+    mk: () => mk,
+    open: () => open,
+    place: () => place,
+    pointer: () => pointer,
+    poly: () => poly,
+    prism: () => prism,
+    proj: () => proj,
+    put: () => put,
+    r2: () => r2,
+    rad: () => rad,
+    reducedMotion: () => reducedMotion,
+    reflect: () => reflect,
+    register: () => register,
+    ringAt: () => ringAt,
+    rings: () => rings,
+    rrect: () => rrect,
+    run: () => run,
+    seg: () => seg,
+    setReducedMotion: () => setReducedMotion,
+    solid: () => solid,
+    spring: () => spring,
+    stepS: () => stepS,
+    tdone: () => tdone,
+    tour: () => tour,
+    tset: () => tset,
+    tval: () => tval,
+    tween: () => tween,
+    unproj: () => unproj
+  });
+
+  // packages/hairline/src/core/iso.ts
+  var clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  var lerp = (a, b, t) => a + (b - a) * t;
+  var rad = (d) => d * Math.PI / 180;
+  var r2 = (n) => Math.round(n * 100) / 100;
+  var poly = (pts) => "M" + pts.map((p) => r2(p[0]) + " " + r2(p[1])).join("L") + "Z";
+  var seg = (a, b) => `M${r2(a[0])} ${r2(a[1])}L${r2(b[0])} ${r2(b[1])}`;
+  var open = (pts) => pts.length < 2 ? "" : "M" + pts.map((p) => r2(p[0]) + " " + r2(p[1])).join("L");
+  var Cam = (azDeg, k, S) => ({ az: rad(azDeg), k, S, ox: 0, oy: 0 });
+  function proj(C) {
+    const c = Math.cos(C.az), s = Math.sin(C.az), zf = Math.sqrt(1 - C.k * C.k);
+    return (x, y, z) => {
+      const X = x * c - y * s, Y = x * s + y * c;
+      return [C.ox + C.S * X, C.oy + C.S * (Y * C.k - z * zf)];
+    };
+  }
+  function unproj(C, sx, sy, z) {
+    const c = Math.cos(C.az), s = Math.sin(C.az), zf = Math.sqrt(1 - C.k * C.k);
+    const X = (sx - C.ox) / C.S, Y = ((sy - C.oy) / C.S + z * zf) / C.k;
+    return [X * c + Y * s, -X * s + Y * c];
+  }
+  function fit(C, pts, cx, cy) {
+    C.ox = 0;
+    C.oy = 0;
+    const P = proj(C);
+    let a = 1e9, b = -1e9, c = 1e9, d = -1e9;
+    for (const p of pts) {
+      const q = P(p[0], p[1], p[2]);
+      a = Math.min(a, q[0]);
+      b = Math.max(b, q[0]);
+      c = Math.min(c, q[1]);
+      d = Math.max(d, q[1]);
+    }
+    C.ox = cx - (a + b) / 2;
+    C.oy = cy - (c + d) / 2;
+  }
+  function rrect(u0, v0, u1, v1, r, n = 4) {
+    r = Math.max(0, Math.min(r, (u1 - u0) / 2, (v1 - v0) / 2));
+    const out = [];
+    for (const [cu, cv, a0] of [[u1 - r, v1 - r, 0], [u0 + r, v1 - r, 90], [u0 + r, v0 + r, 180], [u1 - r, v0 + r, 270]])
+      for (let k = 0; k <= n; k++) {
+        const a = rad(a0 + 90 * k / n), ca = Math.cos(a), sa = Math.sin(a);
+        out.push({ u: cu + r * ca, v: cv + r * sa, nu: ca, nv: sa });
+      }
+    return out;
+  }
+  function circ(R, n = 96) {
+    const out = [];
+    for (let k = 0; k < n; k++) {
+      const a = k / n * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+      out.push({ u: R * ca, v: R * sa, nu: ca, nv: sa });
+    }
+    return out;
+  }
+  function hull(input) {
+    const pts = input.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const x = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const lo = [], up = [];
+    for (const p of pts) {
+      while (lo.length > 1 && x(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop();
+      lo.push(p);
+    }
+    for (let i = pts.length - 1; i >= 0; i--) {
+      const p = pts[i];
+      while (up.length > 1 && x(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop();
+      up.push(p);
+    }
+    lo.pop();
+    up.pop();
+    return lo.concat(up);
+  }
+  var ringAt = (P, ring, z) => ring.map((q) => P(q.u, q.v, z));
+  var facing = (C) => {
+    const s = Math.sin(C.az), c = Math.cos(C.az);
+    return (q) => q.nu * s + q.nv * c >= -1e-6;
+  };
+  function run(ring, keep) {
+    const n = ring.length;
+    let s = -1;
+    for (let i = 0; i < n; i++) if (keep(ring[i]) && !keep(ring[(i + n - 1) % n])) {
+      s = i;
+      break;
+    }
+    if (s < 0) return keep(ring[0]) ? ring.slice() : [];
+    const out = [];
+    for (let k = 0; k < n && keep(ring[(s + k) % n]); k++) out.push(ring[(s + k) % n]);
+    return out;
+  }
+  function prism(P, front, ring, inner, z0, z1) {
+    return {
+      sil: poly(hull(ringAt(P, ring, z1).concat(ringAt(P, ring, z0)))),
+      crease: inner ? open(ringAt(P, run(inner, front), z1)) : ""
+    };
+  }
+  var rings = (x0, y0, x1, y1, r, b) => [
+    rrect(x0, y0, x1, y1, r),
+    rrect(x0 + b, y0 + b, x1 - b, y1 - b, Math.max(0.3, r - b))
+  ];
+  function extremes(P, ring) {
+    const pr = ring.map((q) => P(q.u, q.v, 0));
+    let a = 0, b = 0, c = 0;
+    pr.forEach((p, k) => {
+      if (p[0] < pr[a][0]) a = k;
+      if (p[0] > pr[b][0]) b = k;
+      if (p[1] > pr[c][1]) c = k;
+    });
+    return [ring[a], ring[b], ring[c]];
+  }
+  function fillet(pts, rs, n = 4) {
+    const m = pts.length, out = [];
+    for (let i = 0; i < m; i++) {
+      const a = pts[(i + m - 1) % m], p = pts[i], b = pts[(i + 1) % m];
+      const la = Math.hypot(a[0] - p[0], a[1] - p[1]), lb = Math.hypot(b[0] - p[0], b[1] - p[1]);
+      const t = Math.min(rs[i], la / 2, lb / 2);
+      const p1 = [p[0] + (a[0] - p[0]) / la * t, p[1] + (a[1] - p[1]) / la * t];
+      const p2 = [p[0] + (b[0] - p[0]) / lb * t, p[1] + (b[1] - p[1]) / lb * t];
+      for (let k = 0; k <= n; k++) {
+        const s = k / n, w = 1 - s;
+        out.push([w * w * p1[0] + 2 * w * s * p[0] + s * s * p2[0], w * w * p1[1] + 2 * w * s * p[1] + s * s * p2[1]]);
+      }
+    }
+    return out;
+  }
+  function ghost(P, front, ring, z0, depth) {
+    const f = run(ring, front), lowP = ringAt(P, f, z0 - depth);
+    return {
+      d: open(lowP) + [f[0], f[f.length - 1]].map((q) => seg(P(q.u, q.v, z0), P(q.u, q.v, z0 - depth))).join(""),
+      y0: Math.min(...ringAt(P, f, z0).map((p) => p[1])),
+      y1: Math.max(...lowP.map((p) => p[1])) + 2
+    };
+  }
+
+  // packages/hairline/src/core/motion.ts
+  var reduced = false;
+  var setReducedMotion = (on) => {
+    reduced = on;
+  };
+  var reducedMotion = () => reduced;
+  function spring(x, o = {}) {
+    return { x, v: 0, t: x, k: o.k ?? 100, c: o.c ?? 18, m: o.m ?? 1, eps: o.eps ?? 0.01 };
+  }
+  function stepS(sp, dt) {
+    if (reduced) {
+      sp.x = sp.t;
+      sp.v = 0;
+      return false;
+    }
+    const n = Math.max(1, Math.ceil(dt * 240)), h = dt / n;
+    for (let i = 0; i < n; i++) {
+      const a = (-sp.k * (sp.x - sp.t) - sp.c * sp.v) / sp.m;
+      sp.v += a * h;
+      sp.x += sp.v * h;
+    }
+    if (Math.abs(sp.x - sp.t) < sp.eps && Math.abs(sp.v) < sp.eps * 10) {
+      sp.x = sp.t;
+      sp.v = 0;
+      return false;
+    }
+    return true;
+  }
+  function bezier(x1, y1, x2, y2) {
+    const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+    const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+    const X = (u) => ((ax * u + bx) * u + cx) * u;
+    const Y = (u) => ((ay * u + by) * u + cy) * u;
+    const dX = (u) => (3 * ax * u + 2 * bx) * u + cx;
+    return (t) => {
+      if (t <= 0) return 0;
+      if (t >= 1) return 1;
+      let u = t;
+      for (let i = 0; i < 8; i++) {
+        const e = X(u) - t;
+        if (Math.abs(e) < 1e-5) break;
+        const d = dX(u);
+        if (Math.abs(d) < 1e-6) break;
+        u -= e / d;
+      }
+      if (!(u >= 0 && u <= 1) || Math.abs(X(u) - t) > 1e-4) {
+        let lo = 0, hi = 1;
+        u = t;
+        for (let i = 0; i < 24; i++) {
+          if (X(u) < t) lo = u;
+          else hi = u;
+          u = (lo + hi) / 2;
+        }
+      }
+      return Y(u);
+    };
+  }
+  var EASE_LIFT = bezier(0.32, 0.72, 0, 1);
+  var tween = (v, dur = 700) => ({ from: v, to: v, t0: -1e9, dur });
+  var tval = (tw, now) => {
+    const p = clamp((now - tw.t0) / tw.dur, 0, 1);
+    return tw.from + (tw.to - tw.from) * (reduced ? 1 : EASE_LIFT(p));
+  };
+  var tset = (tw, to, now, delay) => {
+    if (tw.to === to) return;
+    tw.from = tval(tw, now);
+    tw.to = to;
+    tw.t0 = now + delay;
+  };
+  var tdone = (tw, now) => reduced || now >= tw.t0 + tw.dur;
+
+  // packages/hairline/src/core/stage.ts
+  var NS = "http://www.w3.org/2000/svg";
+  function mk(tag, attrs, parent) {
+    const e = document.createElementNS(NS, tag);
+    if (attrs) for (const k in attrs) e.setAttribute(k, String(attrs[k]));
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function solid(parent) {
+    const g = mk("g", {}, parent);
+    return { g, sil: mk("path", { class: "sil" }, g), cr: mk("path", { class: "nf lo" }, g) };
+  }
+  var put = (el, s) => {
+    el.sil.setAttribute("d", s.sil);
+    el.cr.setAttribute("d", s.crease);
+  };
+  var flatDot = (parent, C, r, cls) => mk("ellipse", { rx: r2(r * C.S), ry: r2(r * C.S * C.k), class: cls }, parent);
+  var place = (el, q) => {
+    el.setAttribute("cx", String(r2(q[0])));
+    el.setAttribute("cy", String(r2(q[1])));
+  };
+  var fid = 0;
+  function fade(svg, y0, y1, a0 = 0.7) {
+    const id = "hl-fd" + ++fid, defs = mk("defs", {}, svg);
+    const lg = mk("linearGradient", { id: id + "g", gradientUnits: "userSpaceOnUse", x1: 0, y1: r2(y0), x2: 0, y2: r2(y1) }, defs);
+    mk("stop", { offset: 0, "stop-color": "#fff", "stop-opacity": a0 }, lg);
+    mk("stop", { offset: 1, "stop-color": "#fff", "stop-opacity": 0 }, lg);
+    const m = mk("mask", { id, maskUnits: "userSpaceOnUse", x: 0, y: 0, width: 400, height: 320 }, defs);
+    mk("rect", { x: 0, y: 0, width: 400, height: 320, fill: `url(#${id}g)` }, m);
+    return `url(#${id})`;
+  }
+  function reflect(svg, parent, P, front, ring, z0, depth) {
+    const r = ghost(P, front, ring, z0, depth);
+    const gh = mk("g", { class: "ghost", mask: fade(svg, r.y0, r.y1) }, parent);
+    mk("path", { d: r.d }, gh);
+  }
+  var boards = [];
+  var byStage = /* @__PURE__ */ new Map();
+  var raf = 0;
+  var last = 0;
+  var io = null;
+  var rm = null;
+  function frame(now) {
+    const dt = Math.min(0.05, Math.max(0, (now - last) / 1e3));
+    last = now;
+    let any = false;
+    for (const b of boards.slice()) if (b.vis && b.awake) {
+      try {
+        b.awake = !!b.tick(dt, now);
+      } catch (err) {
+        b.awake = false;
+        setTimeout(() => {
+          throw err;
+        });
+      }
+      any = any || b.awake;
+    }
+    raf = any ? requestAnimationFrame(frame) : 0;
+  }
+  function wake(b) {
+    b.awake = true;
+    if (!raf) {
+      last = performance.now();
+      raf = requestAnimationFrame(frame);
+    }
+  }
+  var onMotion = () => {
+    setReducedMotion(!!rm?.matches);
+    boards.forEach(wake);
+  };
+  function start() {
+    if (io) return;
+    io = new IntersectionObserver((es) => {
+      for (const e of es) {
+        const set = byStage.get(e.target);
+        if (!set) continue;
+        for (const b of set) {
+          b.vis = e.isIntersecting;
+          if (b.vis) wake(b);
+        }
+      }
+    }, { rootMargin: "80px" });
+    rm = matchMedia("(prefers-reduced-motion: reduce)");
+    setReducedMotion(rm.matches);
+    rm.addEventListener("change", onMotion);
+  }
+  function stop() {
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+    io?.disconnect();
+    io = null;
+    rm?.removeEventListener("change", onMotion);
+    rm = null;
+  }
+  function register(stage, tick) {
+    start();
+    const b = { stage, tick, vis: false, awake: true };
+    boards.push(b);
+    const peers = byStage.get(stage);
+    if (peers) {
+      for (const p of peers) b.vis = p.vis;
+      peers.add(b);
+      if (b.vis) wake(b);
+    } else {
+      byStage.set(stage, /* @__PURE__ */ new Set([b]));
+      io.observe(stage);
+    }
+    tick(0, performance.now());
+    let gone = false;
+    return {
+      wake: () => {
+        if (!gone) wake(b);
+      },
+      unregister: () => {
+        if (gone) return;
+        gone = true;
+        boards = boards.filter((x) => x !== b);
+        const set = byStage.get(stage);
+        if (set) {
+          set.delete(b);
+          if (!set.size) {
+            byStage.delete(stage);
+            io?.unobserve(stage);
+          }
+        }
+        if (!boards.length) stop();
+      }
+    };
+  }
+  var handlers = /* @__PURE__ */ new WeakMap();
+  var touring = /* @__PURE__ */ new WeakMap();
+  function pointer(stage, on) {
+    handlers.set(stage, on);
+    let tm = 0;
+    const pt = (e) => {
+      const r = stage.getBoundingClientRect();
+      return [(e.clientX - r.left) / r.width * 400, (e.clientY - r.top) / r.height * 320];
+    };
+    const move = (e) => {
+      clearTimeout(tm);
+      touring.get(stage)?.hold();
+      on.move(pt(e), e);
+    };
+    const down = (e) => {
+      clearTimeout(tm);
+      touring.get(stage)?.hold();
+      if (e.pointerType !== "mouse") stage.releasePointerCapture?.(e.pointerId);
+      if (on.down) on.down(pt(e), e);
+      else on.move(pt(e), e);
+    };
+    const leave = (e) => {
+      clearTimeout(tm);
+      tm = window.setTimeout(() => {
+        on.leave(e);
+        touring.get(stage)?.release();
+      }, e.pointerType === "mouse" ? 0 : 1400);
+    };
+    stage.addEventListener("pointermove", move);
+    stage.addEventListener("pointerdown", down);
+    stage.addEventListener("pointerleave", leave);
+    return () => {
+      clearTimeout(tm);
+      if (handlers.get(stage) === on) handlers.delete(stage);
+      stage.removeEventListener("pointermove", move);
+      stage.removeEventListener("pointerdown", down);
+      stage.removeEventListener("pointerleave", leave);
+    };
+  }
+  var LAP = [[128, 150], [200, 118], [272, 150], [200, 206], null];
+  var TRAVEL = 900;
+  var DWELL = 1200;
+  var REST = 1800;
+  var RESUME = 1200;
+  var STAGGER = 450;
+  var GHOST = { pointerType: "ghost" };
+  var started = 0;
+  function entry([x, y]) {
+    const dx = x - 200, dy = y - 160;
+    if (!dx && !dy) return [200, 320];
+    const k = Math.min(dx ? (dx > 0 ? 200 : -200) / dx : Infinity, dy ? (dy > 0 ? 160 : -160) / dy : Infinity);
+    return [200 + dx * k, 160 + dy * k];
+  }
+  function tour(stage, stops, onStop) {
+    let i = 0;
+    let wait = RESUME + STAGGER * (started++ % 4);
+    let t = -1;
+    let at = null;
+    let origin = [200, 320];
+    let hand = false, keys = stage.contains(stage.ownerDocument.activeElement);
+    let gone = false;
+    const leave = () => {
+      at = null;
+      t = -1;
+      handlers.get(stage)?.leave(GHOST);
+    };
+    const tick = (dt) => {
+      if (hand || keys || !stops.length) return false;
+      if (reducedMotion()) {
+        if (at) leave();
+        return false;
+      }
+      if (wait > 0) {
+        wait -= dt * 1e3;
+        return true;
+      }
+      const stop2 = stops[i];
+      if (stop2 === null) {
+        if (at) leave();
+        onStop?.(i);
+        i = (i + 1) % stops.length;
+        wait = REST;
+        return true;
+      }
+      const h = handlers.get(stage);
+      if (!h) return true;
+      if (t < 0) {
+        origin = at ?? entry(stop2);
+        t = 0;
+      }
+      t = Math.min(TRAVEL, t + dt * 1e3);
+      const k = EASE_LIFT(t / TRAVEL);
+      at = [origin[0] + (stop2[0] - origin[0]) * k, origin[1] + (stop2[1] - origin[1]) * k];
+      h.move(at, GHOST);
+      if (t < TRAVEL) return true;
+      onStop?.(i);
+      i = (i + 1) % stops.length;
+      t = -1;
+      wait = DWELL;
+      return true;
+    };
+    const take = () => {
+      at = null;
+      t = -1;
+    };
+    const give = () => {
+      if (hand || keys) return;
+      i = 0;
+      t = -1;
+      wait = RESUME;
+      board.wake();
+    };
+    const me = {
+      hold: () => {
+        hand = true;
+        take();
+      },
+      release: () => {
+        if (!hand) return;
+        hand = false;
+        give();
+      }
+    };
+    const focusIn = () => {
+      keys = true;
+      take();
+    };
+    const focusOut = (e) => {
+      if (keys && !stage.contains(e.relatedTarget)) {
+        keys = false;
+        give();
+      }
+    };
+    stage.addEventListener("focusin", focusIn);
+    stage.addEventListener("focusout", focusOut);
+    touring.set(stage, me);
+    const board = register(stage, tick);
+    return {
+      stop: () => {
+        if (gone) return;
+        gone = true;
+        board.unregister();
+        stage.removeEventListener("focusin", focusIn);
+        stage.removeEventListener("focusout", focusOut);
+        if (touring.get(stage) === me) touring.delete(stage);
+        if (at) leave();
+      }
+    };
+  }
+  function disposer() {
+    let fns = [];
+    return {
+      add: (fn) => {
+        fns.push(fn);
+      },
+      on: (target, type, fn, opts) => {
+        const h = fn;
+        target.addEventListener(type, h, opts);
+        fns.push(() => target.removeEventListener(type, h, opts));
+      },
+      dispose: () => {
+        const run2 = fns;
+        fns = [];
+        for (let i = run2.length - 1; i >= 0; i--) run2[i]();
+      }
+    };
+  }
+
+  // packages/hairline/src/core/styles.ts
+  var LIGHT = { plate: "#ffffff", hi: "#232327", edge: "#a4a4ac", mid: "#c3c3c9", lo: "#e0e0e4" };
+  var DARK = { plate: "#08090a", hi: "#d0d6e0", edge: "#5b5d64", mid: "#3e3e44", lo: "#29292d" };
+  var KEYS = ["plate", "hi", "edge", "mid", "lo"];
+  var vars = (p) => KEYS.map((k) => `--hl-${k}:var(--hairline-${k},${p[k]});`).join("");
+  var EASE = "cubic-bezier(0.5,0,0.1,1)";
+  var SVG = ":where([data-hairline]>svg)";
+  function css(lightDark) {
+    const both = Object.fromEntries(KEYS.map((k) => [k, `light-dark(${LIGHT[k]},${DARK[k]})`]));
+    return [
+      // the box, and the palette: light unless something below says otherwise
+      `:where([data-hairline]){display:block;position:relative;aspect-ratio:5/4;touch-action:pan-y;user-select:none;-webkit-user-select:none;--hl-sw:var(--hairline-stroke,0.9);${vars(LIGHT)}}`,
+      // the page's color-scheme
+      lightDark ? `:where([data-hairline]){${vars(both)}}` : "",
+      // an ancestor that says dark
+      `:where(.dark,[data-theme="dark"]) :where([data-hairline]){${vars(DARK)}}`,
+      // the figure's own theme option
+      `:where([data-hairline][data-hairline-theme="light"]){${vars(LIGHT)}}`,
+      `:where([data-hairline][data-hairline-theme="dark"]){${vars(DARK)}}`,
+      `:where([data-hairline]:focus-visible){outline:1.5px solid var(--hl-hi);outline-offset:2px}`,
+      `${SVG}{position:absolute;inset:0;width:100%;height:100%;display:block}`,
+      // Riffle's live region: read, not seen
+      `:where([data-hairline]>[data-hairline-live]){position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}`,
+      // the drawing: plates are filled with the plate colour and painted back to front
+      `${SVG} :where(path,polygon,ellipse,line){fill:var(--hl-plate);stroke:var(--hl-mid);stroke-width:var(--hl-sw);vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round;transition:stroke 260ms ${EASE}}`,
+      `${SVG} :where(.nf){fill:none}`,
+      `${SVG} :where(.fo){stroke:none}`,
+      `${SVG} :where(.sil){stroke:var(--hl-edge)}`,
+      `${SVG} :where(.hi){stroke:var(--hl-hi)}`,
+      `${SVG} :where(.lo){stroke:var(--hl-lo)}`,
+      `${SVG} :where(.dash){stroke-dasharray:1 3}`,
+      `${SVG} :where(.dot){stroke:none;fill:var(--hl-hi);transition:fill 260ms ${EASE}}`,
+      `${SVG} :where(.dot.m){fill:var(--hl-edge)}`,
+      `${SVG} :where(.dot.off){fill:var(--hl-lo)}`,
+      `${SVG} :where(.ghost path){fill:none;stroke:var(--hl-mid)}`
+    ].join("");
+  }
+  var done = /* @__PURE__ */ new WeakSet();
+  function inject(root) {
+    if (done.has(root)) return;
+    done.add(root);
+    const doc = root.nodeType === 9 ? root : root.ownerDocument;
+    const win = doc.defaultView;
+    const text = css(!!win?.CSS?.supports?.("color", "light-dark(#000,#fff)"));
+    if (win && "adoptedStyleSheets" in root) {
+      try {
+        const sheet = new win.CSSStyleSheet();
+        sheet.replaceSync(text);
+        root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
+        return;
+      } catch {
+      }
+    }
+    const style = doc.createElement("style");
+    style.setAttribute("data-hairline-style", "");
+    style.textContent = text;
+    (root.nodeType === 9 ? doc.head ?? doc.documentElement : root).appendChild(style);
+  }
+  return __toCommonJS(kernel_exports);
+})();
+/* /hairline kernel */
+</script>
+<script id="hl-bench">
+/*
+ * The bench: the page a figure is shown on. It makes the host and the svg the
+ * way the package's mount does, hands them to the figure, and owns everything
+ * around it: the read-out, the slider, the theme, the line under the stage.
+ */
+(() => {
+  const RULES = ["hit", "order", "reach", "accent", "rest", "honesty", "cost", "clock", "radius", "quiet"];
+  const $ = (id) => document.getElementById(id);
+  const root = document.documentElement, params = new URLSearchParams(location.search);
+
+  /* the theme: the system's until the switch is pressed, then the switch's */
+  const dark = () => (root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches);
+  const label = () => { $("theme").textContent = dark() ? "dark" : "light"; };
+  $("theme").addEventListener("click", () => { root.dataset.theme = dark() ? "light" : "dark"; label(); });
+  /* ?theme=light or ?theme=dark wins over the system's, as pressing the switch does */
+  if (["light", "dark"].includes(params.get("theme"))) root.dataset.theme = params.get("theme");
+  label();
+
+  /* ?intensity=0 sets the slider before the figure mounts, for a look at either end */
+  const i = (params.get("intensity") || "").trim();
+  if (i && Number.isFinite(Number(i))) $("intensity").value = String(Math.min(1, Math.max(0, Number(i))));
+
+  /* ?w=240 narrows the page, for a look at the size of a thumbnail */
+  const w = Number(params.get("w"));
+  if (w > 0) document.querySelector("main").style.maxWidth = w + "px";
+
+  /* a figure that fails says so under the stage, instead of leaving an empty plate */
+  addEventListener("error", (e) => {
+    $("error").hidden = false;
+    $("error").textContent = String((e.error && e.error.message) || e.message);
+  });
+
+  let mounted = false;
+  window.hairline = (figure) => {
+    if (mounted) throw new Error("hairline: one figure per page.");
+    mounted = true;
+    const stage = $("stage"), slider = $("intensity");
+
+    /* intensity to the figure's own number: two straight lines that meet at 0.5, as in the package */
+    const [lo, mid, hi] = figure.range;
+    const at = (i) => Math.round((i <= 0.5 ? lo + (i / 0.5) * (mid - lo) : mid + ((i - 0.5) / 0.5) * (hi - mid)) * 1000) / 1000;
+
+    HL.inject(document);
+    stage.setAttribute("data-hairline", figure.name);
+    stage.setAttribute("role", "img");
+    stage.setAttribute("aria-label", figure.means);
+    const svg = HL.mk("svg", { viewBox: "0 0 400 320", "aria-hidden": "true" }, stage);
+
+    let text = null;
+    const read = {
+      get textContent() { return text; },
+      set textContent(value) { text = value == null ? "" : String(value); $("read").textContent = text; },
+    };
+
+    document.title = "Hairline · " + figure.name;
+    $("name").textContent = figure.name;
+    $("means").textContent = figure.means;
+    $("rules").textContent = figure.rules.map((n) => String(n).padStart(2, "0") + " " + RULES[n - 1]).join(" · ");
+    const show = () => { $("value").textContent = String(at(Number(slider.value))); };
+    show();
+
+    const handle = figure.mount({ stage, svg, read }, at(Number(slider.value)));
+    if (text === null) read.textContent = "rest";
+    slider.addEventListener("input", () => { show(); handle.set(at(Number(slider.value))); });
+    window.hairline.figure = handle;
+
+    /* play: an unseen pointer walks the figure's tour (or HL.LAP) until a hand arrives; ?play=1 starts it on load */
+    const play = $("play");
+    window.hairline.playing = null;
+    play.addEventListener("click", () => {
+      const was = play.getAttribute("aria-pressed") === "true";
+      if (was) { window.hairline.playing.stop(); window.hairline.playing = null; }
+      else window.hairline.playing = HL.tour(stage, figure.tour || HL.LAP, (i) => { if (window.hairline.onStop) window.hairline.onStop(i); });
+      play.setAttribute("aria-pressed", String(!was));
+    });
+    if (params.get("play") === "1") play.click();
+
+    /* ?at=200,160 holds the pointer at a viewBox point, for a picture of the answer without a mouse */
+    const p = (params.get("at") || "").split(",").map(Number);
+    if (p.length === 2 && p.every(Number.isFinite)) {
+      const r = stage.getBoundingClientRect();
+      stage.dispatchEvent(new PointerEvent("pointermove", {
+        pointerType: "mouse", pointerId: 1, bubbles: true,
+        clientX: r.left + (p[0] / 400) * r.width, clientY: r.top + (p[1] / 320) * r.height,
+      }));
+    }
+  };
+})();
+</script>
+<script type="module" id="hl-figure">
+/**
+ * Supra: a GR Supra A90 (3.0, B58, right-hand drive) as a stylised line drawing on a showroom platter that turns once a
+ * minute, its facing lamps lit. The pointer entering the car stops the platter and bursts the car into a workshop-manual
+ * exploded view of its 28 major parts, rippling out from the hand on 700ms tweens; a part under a cover rides the cover's
+ * tween. A slow move picks one part: its edges go bright and its name goes to the read-out. A fast sideways flick across
+ * the exploded car pushes the platter, which coasts to a stop with the car still apart. Leaving puts it back together and
+ * the platter turns again. The slider is the explode spread, in cm. Hit tests read only the target pose, at the angle the
+ * platter will stop at, never the pose on screen. World units are cm: +x front, +y the car's right, +z up; platter top z 0.
+ */
+const { Cam, circ, clamp, extremes, fillet, fit, hull, lerp, open, poly, prism, proj, rad, r2, rrect, run, seg, spring, stepS, tdone, tset,
+  tval, tween, reducedMotion, disposer, flatDot, mk, place, pointer, put, register, solid } = HL;
+
+const S = 0.74, HOME = 35, K = 0.5, ZF = Math.sqrt(1 - K * K), RANGE = [42, 60, 75];
+/** The platter: ambient speed (°/s), brake and coast time constants (s), flick threshold (units/s), gain (° per unit). */
+const AMB = -6, BRAKE = 0.2, COAST = 0.65, FLICK = 700, GAIN = 0.3, WMAX = 400;
+const UNIT = 60, STEP = 40, GROW = 6, Z3 = [0, 0, 0], sides = [1, -1], CYL = [122.8, 113.7, 104.6, 95.5, 86.4, 77.3];
+
+// ---- vectors, rings and the three solid recipes ----
+const add = (a, b) => a.map((v, i) => v + b[i]), sub = (a, b) => a.map((v, i) => v - b[i]), mul = (a, k) => a.map((v) => v * k);
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2], norm = (a) => mul(a, 1 / Math.hypot(...a));
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+/** Toward the viewer at azimuth az (degrees): a face whose normal has a positive dot with it is seen. */
+const V = (az) => [ZF * Math.sin(rad(az)), ZF * Math.cos(rad(az)), K];
+const yy = (s, a, b) => (s > 0 ? [a, b] : [-b, -a]), pm = (y) => [-y, y];
+const R = (x0, x1, [y0, y1], r, n = 4) => rrect(x0, y0, x1, y1, r, n);
+const ins = (ring, b) => ring.map((q) => ({ ...q, u: q.u - q.nu * b, v: q.v - q.nv * b }));
+/** A ring with n samples between each pair, so a z(x, y) top follows its curve along the straight runs too. */
+const dense = (ring, n) => ring.flatMap((q, i) => { const b = ring[(i + 1) % ring.length];
+  return Array.from({ length: n }, (_, k) => ({ u: lerp(q.u, b.u, k / n), v: lerp(q.v, b.v, k / n), nu: q.nu, nv: q.nv })); });
+/** Points mirrored to side s; a half plan (y ≥ 0) mirrored into a whole one. */
+const mir = (s, pts) => pts.map(([x, y, z]) => [x, s * y, z]);
+const sym = (h) => h.concat(h.slice().reverse().filter((p) => p[1]).map(([x, y]) => [x, -y]));
+/** A plan polygon, filleted, as ring samples; each normal is its neighbours' chord turned away from the middle. */
+function pring(pts, r) {
+  const f = fillet(pts, pts.map((_, i) => (Array.isArray(r) ? r[i] : r))), n = f.length;
+  const cu = f.reduce((a, p) => a + p[0] / n, 0), cv = f.reduce((a, p) => a + p[1] / n, 0);
+  return f.map((p, i) => {
+    const a = f[(i + n - 1) % n], b = f[(i + 1) % n], d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    const nu = (b[1] - a[1]) / d, nv = (a[0] - b[0]) / d, sg = nu * (p[0] - cu) + nv * (p[1] - cv) < 0 ? -1 : 1;
+    return { u: p[0], v: p[1], nu: nu * sg, nv: nv * sg };
+  });
+}
+/** A crease or mark on a face with normal n: drawn only while that face is seen. */
+const face = (pts, n) => (v) => (dot(v, n) > 0 ? [[pts, false]] : []);
+/** Rings [ring, z] (z a number or z(x, y)): the hull of all of them. The crease is the inset front run of the top ring
+ *  (or of ring `cr`), or a custom polyline [pts, n] on a face. */
+function SLAB(rs, cr) {
+  const at = (q, z) => [q.u, q.v, typeof z === "function" ? z(q.u, q.v) : z];
+  const [top, zt] = rs[typeof cr === "number" ? cr : rs.length - 1], inner = ins(top, 2);
+  const front = (v) => [[run(inner, (q) => q.nu * v[0] + q.nv * v[1] >= 0).map((q) => at(q, zt)), false]];
+  return { pts: rs.flatMap(([r, z]) => r.map((q) => at(q, z))), cr: Array.isArray(cr) ? face(...cr) : front };
+}
+const PR = (ring, z0, z1, cr) => SLAB([[ring, z0], [ring, z1]], cr);
+/** A round solid from A to B, radius rA to rB (or any section ring): the hull of its end rings. at(t, u, v) is the point t
+ *  along the axis and (u, v) across it. Crease: "cap", the seen cap's inset edge; [r], a ring of radius r on the seen cap;
+ *  ["ring", t], the seen half of the ring at t; "line", a line along the side that faces the viewer. */
+function DRUM(A, B, rA, rB, cr, sec = circ(1, 48)) {
+  const ax = sub(B, A), e = norm(ax), U = norm(Math.abs(e[2]) > 0.99 ? [0, 1, 0] : cross(e, [0, 0, 1])), W = cross(e, U);
+  const at = (t, u, v) => add(add(A, mul(ax, t)), add(mul(U, u), mul(W, v)));
+  const ring = (t, r, s = sec) => s.map((q) => at(t, q.u * r, q.v * r)), fz = (v, q) => dot(v, add(mul(U, q.nu), mul(W, q.nv)));
+  const crease = (v) => {
+    const t = dot(v, e) > 0 ? 1 : 0, r = t ? rB : rA;
+    if (cr === "cap") return [[ring(t, r, ins(sec, 1.5 / r)), true]];
+    if (cr === "line") {
+      const q = sec.reduce((b, q) => (fz(v, q) > fz(v, b) ? q : b));
+      return [[[at(0, q.u * rA, q.v * rA), at(1, q.u * rB, q.v * rB)], false]];
+    }
+    if (cr[0] === "ring") {
+      const rr = lerp(rA, rB, cr[1]);
+      return [[run(sec, (q) => fz(v, q) >= 0).map((q) => at(cr[1], q.u * rr, q.v * rr)), false]];
+    }
+    return [[ring(t, cr[0]), true]];
+  };
+  return { pts: ring(0, rA).concat(ring(1, rB)), cr: crease, at };
+}
+/** Marks: [class, face normal, strokes]; a stroke is [world points, closed, fillet radii]. */
+const W = (s, ...mk) => Object.assign(s, { mk });
+const M = (cls, n, ...st) => [cls, n, st];
+const on = (ring, f, r) => [ring.map((q) => f(q.u, q.v)), true, r];
+const xz = (x, y, z) => (u, v) => [x + u, y, z + v], xy = (x, y, z) => (u, v) => [x + u, y + v, z];
+const arc = (x, y, z, r, a0, a1, n = 16) => Array.from({ length: n + 1 }, (_, k) => xz(x, y, z)(...pol(r, lerp(a0, a1, k / n))));
+const pol = (r, d) => [r * Math.cos(rad(d)), r * Math.sin(rad(d))];
+/** The roof top: two crests at y ±27 with an 8 cm dip between (the double bubble), falling toward the rear into the hatch. */
+const ztop = (x, y) => 129.4 - 8 * Math.exp(-((y / 11) ** 2)) - 7 * Math.max(0, (Math.abs(y) - 27) / 34) ** 2 - 0.2 * Math.max(0, -60 - x);
+/** The glass, as face marks on the roof and hatch hulls: the windshield, each side's long low window with its rearward kick at the
+ *  C-pillar, and the backlight. The points lie on the hulls (found by ray-casting them at design time). */
+const DLO = [[42, 64.7, 95.5], [12, 58.6, 115], [-35, 62.7, 118.5], [-70, 64.5, 113], [-97, 63.3, 103], [-84, 69.5, 98.5]];
+const GLASS = [
+  M("nf", norm([0.56, 0, 0.83]), [[[48.9, -50, 95], [48.9, 50, 95], [13.9, 40, 121], [13.9, -40, 121]], true, [4, 4, 6, 6]]),
+  ...sides.map((s) => M("nf", [0, s, 0.3], [mir(s, DLO), true, [3, 8, 10, 8, 0.5, 6]]))];
+const BACKLIGHT = M("nf", norm([-0.28, 0, 0.96]),
+  [[[-115, -47, 116.8], [-115, 47, 116.8], [-177, 42, 100.9], [-177, -42, 100.9]], true, 6]);
+
+// ---- the 28 parts: name, layer (0 inner, 1 shell, 2 outboard), solids, explode B + D·s, gates [part, c], guide ----
+const PARTS = [];
+const part = (name, layer, solids, B = Z3, D = Z3, gates = null, guide = null) =>
+  PARTS.push({ name, layer, solids, B, D, gates, guide });
+/** A guide: dashed drops from a cover's two outermost foot points to where they have gone. */
+const drops = (ring, z) => (P, o) => extremes(P, ring).slice(0, 2)
+  .map((q) => seg(P(q.u, q.v, z), P(q.u + o[0], q.v + o[1], z + o[2]))).join("");
+/** The walls tumble home: their half-width wy(z) tucks under at the sill and rolls in at the top, which falls toward the
+ *  front, wtop(x), as the real front fender does; the crowns rise over the front wheels and fall onto the headlamps. */
+const wy = (z) => (z < 30 ? 87 + (z - 15) / 5 : z > 74 ? 90 - (3 * (z - 74)) / 16 : 90);
+const wtop = (x) => (x < 128 ? 90 : 90 - 8 * ((x - 128) / 34) ** 1.5);
+const crown = (x) => wtop(x) + 1 + 5 * Math.exp(-(((x - 120) / 34) ** 2));
+const onW = (s, pts) => pts.map(([x, z]) => [x, s * wy(z), z]);
+/** Each haunch pod is two solids split at the rear arch's trailing edge XA, so the rear quarter sorts by x against the wheel
+ *  and the arch slice by y. A half plan (y ≥ 0, its outer edge at 99) is scaled out to width w for each ring: tucked at the
+ *  sill, full at the hip, rolled in at the shoulder; the top ring, y 70 to 90 at z 91.5, is the shoulder shelf. */
+const XA = -157.25, POD = [
+  [[[-89, 55], [-89, 92], [-104, 99], [XA, 99], [XA, 55]], [3, 3, 6, 0.5, 0.5]],
+  [[[XA, 55], [XA, 99], [-168, 94], [-178, 88], [-186, 82], [-186, 55]], [0.5, 0.5, 6, 6, 3, 3]]];
+const podRing = (s, pts, r, w, y0 = 55) => pring(pts.map(([x, y]) => [x, s * (y0 + ((y - 55) * (w - y0)) / 44)]), r);
+const PODZ = [[95, 15], [99, 50], [98, 76], [94, 88]];
+part("body shell", 1, [
+  ...sides.map((s) => W(Object.assign(SLAB([[R(-89, 162, yy(s, 70, 87), 6), 15], [R(-89, 162, yy(s, 70, 90), 6), 30],
+    [R(-89, 162, yy(s, 70, 90), 6), 74], [dense(R(-89, 160, yy(s, 71, 87), 6), 6), wtop]],
+  [onW(s, [[48, 18], [48, 30], [48, 74], [48, 89]]), [0, s, 0]]), { face: 1 }), // crease: the door's front shut line
+  // marks: the door scallop sweeping up into the haunch, the tall door vent and the front arch lip
+  M("nf", [0, s, 0], [onW(s, [[82, 38], [20, 31], [-40, 33], [-72, 46], [-88, 70]]), false],
+    [onW(s, [[-75, 86], [-87, 86], [-87, 56]]), true, 2], [arc(123.5, 90 * s, 33, 37, 12, 168), false]))),
+  ...sides.flatMap((s) => POD.map(([pl, r], j) => {
+    const rings = PODZ.map(([w, z]) => [podRing(s, pl, r, w), z]).concat([[podRing(s, pl, r, 90, 70), 91.5]]);
+    const lip = j ? [] : [M("nf", [0, s, 0], [arc(-123.5, 98.5 * s, 33.75, 38, 15, 153), false])];
+    return W(Object.assign(SLAB(rings), { face: 1 }), ...lip);
+  })),
+  ...sides.map((s) => PR(R(-89, 48, yy(s, 33, 70), 4), 11, 16)),
+  PR(R(46, 62, pm(70), 4), 86, 90),
+  // the door mirrors: a head on a short stalk off the beltline
+  ...sides.map((s) => SLAB([[R(40, 48, yy(s, 84, 90), 3), 90], [R(36, 54, yy(s, 93, 104), 6), 93.5],
+    [R(38, 52, yy(s, 94, 103), 6), 99.5]])),
+]);
+const nose = pring(sym([[162, 92], [172, 89], [181.5, 86], [191, 80], [200.5, 66.5], [207, 48], [213.5, 34.5],
+  [219.3, 16]]), 3);
+const lamp = (s) => [mir(s, [[206, 22, 56], [186, 50, 71], [171, 74, 78.3], [190, 52, 64]]), true, [1, 4, 1, 4]];
+// the chin tucks under (the foot ring inset 5) and the beak leans back to the bonnet's leading edge
+part("front end", 1, [Object.assign(W(SLAB([[ins(nose, 5), 12], [nose, 28], [R(199, 207, pm(22), 4), 60],
+  [R(162, 176, [70, 88], 6), 78], [R(162, 176, [-88, -70], 6), 78]],
+  [[[164, -86, 78], [186, -58, 70], [205, -22, 61], [205, 22, 61], [186, 58, 70], [164, 86, 78]], [0.35, 0, 0.94]]),
+M("nf lo", [0.97, 0, 0.24], [[[210.5, 20, 46.5], [215, 26, 23], [215, -26, 23], [210.5, -20, 46.5]], true, 2]),
+...sides.map((s) => M("nf lo", [0.9, 0.37 * s, 0.22], [mir(s, [[211, 30, 45], [205, 64, 44], [209, 64, 27], [215, 30, 26]]), true, 2])),
+M("nf lo", [1, 0, 0.5], [[[193.7, -71.4, 19], [208, -38, 14.5], [214, 0, 14.5], [208, 38, 14.5], [193.7, 71.4, 19]], false]),
+...sides.map((s) => M("head", norm([0.55, 0.55 * s, 0.6]), lamp(s)))),
+{ bx: [[162, 219.3, -92, 92, 12, 60], [162, 200, -90, 90, 60, 78]] })],
+[12, 0, 0], [18, 0, 0], [["bonnet", 0.35]]);
+// the bonnet's plateau sits low between its two fender crowns; its leading edge crosses the nose above the intakes
+const plateau = R(58, 140, pm(78), 14), bhw = (x) => 78 - 54 * (x - 140) / 59;
+const btop = (x) => (x <= 140 ? 92.5 : 92.5 - 26.5 * (x - 140) / 67);
+const bonnetBx = [[58, 140, -78, 78, 90, 92.5]].concat([[140, 152], [152, 164], [164, 176], [176, 188], [188, 207]]
+  .map(([a, b]) => [a, b, -bhw(a), bhw(a), Math.max(60, 90 - 0.5 * (b - 140)), btop(a)]));
+const commas = M("nf", [0, 0, 1], ...sides.map((s) => [[[61, 64 * s, 92.5], [64, 75 * s, 92.5], [100, 74 * s, 92.5]], true, [3, 3, 1]]));
+part("bonnet", 1, [
+  Object.assign(W(SLAB([[plateau, 92.5], [plateau, 90], [R(199, 207, pm(24), 4), 66], [R(199, 207, pm(24), 4), 60.5]],
+    [[[60, 0, 92.8], [140, 0, 92.8], [205, 0, 66.3]], [0, 0, 1]]), commas), { bx: bonnetBx }),
+  // the clamshell covers the fender tops: two crowns rise over the front wheels and fall onto the headlamps
+  // (their flank edge, from the headlamp's tip back to the cowl, is the clamshell's shut line)
+  ...sides.map((s) => SLAB([[dense(R(70, 162, yy(s, 78, 89), 6), 6), wtop], [R(162, 168, yy(s, 78, 88), 3), 79.5],
+    [dense(R(76, 158, yy(s, 82.5, 87.5), 8), 6), crown]]))],
+[0, 0, 40], [12, 0, 52], null, drops(plateau, 90));
+const roofFoot = pring([[58, -36], [58, 36], [46, 70], [-92, 72], [-106, 66], [-106, -66], [-92, -72], [46, -70]],
+  [18, 18, 8, 8, 8, 8, 8, 8]);
+part("roof", 1, [W(SLAB([[roofFoot, 92], [dense(R(-106, 3, pm(61), 20), 6), ztop]]), ...GLASS)],
+  [0, 0, 48], [0, 0, 25], null, drops(roofFoot, 92));
+// the hatch's foot is wider than its glass, so its sides fall like sail panels; the ducktail deck covers the bumper's top
+const hatchFoot = pring(sym([[-106, 68], [-186, 57]]), 8);
+const tail = pring(sym([[-186, 82], [-193, 80], [-197.5, 75.5], [-202.5, 68], [-207, 64], [-212, 48], [-216.6, 25.5], [-219, 0]]), 2);
+part("hatch", 1, [
+  Object.assign(W(SLAB([[dense(R(-112, -106, pm(58), 6), 6), (x, y) => ztop(-106, y)], [hatchFoot, 92],
+    [R(-186, -180, pm(52), 8), 98]]), BACKLIGHT),
+    { bx: [[-150, -106, -68, 68, 92, 120.5], [-186, -150, -62, 62, 92, 109.5]] }),
+  SLAB([[ins(tail, 4.5), 88], [R(-190, -186, pm(52), 4), 98], [pring(sym([[-199, 58], [-204, 42], [-207, 0]]), 6), 100.5]], 2),
+], [-8, 0, 46], [-10, 0, 22], null, drops(hatchFoot, 92));
+/** A tail lamp: a blade along the tail's own surface, from beside the plate out round the corner to the haunch. */
+const tlamp = (s) => {
+  const along = (k, z) => ins(tail, k).filter((q) => q.v * s > 26 && q.v * s < 81 && q.u < -188).map((q) => [q.u, q.v, z]);
+  return [along(3.4, 80).concat(along(2.8, 75.5).reverse()), true, 1];
+};
+part("rear bumper", 1, [
+  // the tail face leans in at the top under the ducktail and tucks under at the diffuser
+  W(SLAB([[ins(tail, 6), 26], [tail, 44], [ins(tail, 1.5), 66], [ins(tail, 4.5), 88]],
+    [[[-207.6, -61.5, 56], [-214.6, -27, 68], [-214.6, 27, 68], [-207.6, 61.5, 56]], [-1, 0, 0]]),
+    ...sides.map((s) => M("tail", norm([-1, 0.6 * s, 0.15]), tlamp(s)))),
+  W(PR(R(-217, -195, pm(38), 6), 12, 26), M("nf lo", [-1, 0, 0],
+    ...[-28, -14, 14, 28].map((y) => [[[-217, y, 13.5], [-217, y, 24.5]], false]),
+    on(rrect(-5.5, 13.5, 5.5, 24.5, 1.5), (u, v) => [-217, u, v]))),
+], [-24, 0, 30], [-12, 0, 6], [["hatch", 0.4]]);
+
+// the engine bay: a long narrow straight-six, never a V
+part("b58 block", 0, [PR(R(70, 130, pm(16), 5), 16, 31), PR(R(67, 131, pm(21), 5), 31, 57),
+  W(PR(R(69, 131, pm(15), 4), 57, 70),
+    M("nf lo", [0, 1, 0], ...CYL.map((x) => on(rrect(x - 2.5, 61, x + 2.5, 65, 1), (u, v) => [u, 15, v])))),
+  DRUM([131, 0, 36], [135, 0, 36], 10, 10, "cap")]);
+part("cam cover", 0, [W(PR(R(69, 130, pm(12), 5), 70, 78), M("nf lo", [0, 0, 1],
+  ...CYL.map((x) => on(rrect(x - 3, -4, x + 3, 4, 1.5), xy(0, 0, 78))), on(circ(3, 16), xy(126, -7, 78))))],
+[0, 0, 10], [0, 0, 22], [["engine cover", 0.4]]);
+part("engine cover", 0, [W(SLAB([[R(70, 130, [-29, 18], 14), 78.5], [R(74, 126, [-25, 14], 12), 84]]),
+  M("nf lo", [0, 0, 1], on(rrect(80, 2, 120, 10, 3), xy(0, 0, 84))))], [0, 0, 30], [0, 0, 40], [["bonnet", 0.45]]);
+part("intercooler", 0, [
+  W(PR(R(72, 130, [-39, -19], 6), 48, 69), M("nf lo", [0, 1, 0], ...CYL.map((x) => on(circ(2.6, 12), xz(x, -19, 60))))),
+  DRUM([130, -29, 62], [138, -29, 62], 3.75, 3.75, "cap")], [0, 0, 18], [0, -10, 14], [["engine cover", 0.4], ["strut braces", 0.4]]);
+part("turbo", 0, [DRUM([98, 34, 50], [108, 34, 50], 7.5, 7.5, "cap"), DRUM([93, 34, 50], [98, 34, 50], 4, 4, ["ring", 0.5]),
+  DRUM([82, 34, 50], [93, 34, 50], 8.5, 8.5, ["ring", 0.5])], [0, 8, 22], [0, 6, 18], [["bonnet", 0.45]]);
+part("strut braces", 0, sides.flatMap((s) => {
+  // the bar starts at its tower's rim (x 129.5), so the tower and the bar are split by a plane
+  const bx = [[129.5, 146, 43, 56.5, 70, 79.5], [146, 160.5, 37.5, 48.5, 67.5, 75.5]]
+    .map((b) => (s > 0 ? b : [b[0], b[1], -b[3], -b[2], b[4], b[5]]));
+  return [Object.assign(DRUM([130.25, 53.5 * s, 76.75], [158, 40 * s, 70], 2.5, 2.5, "line"), { bx }),
+    PR(circ(8.5, 24).map((q) => ({ ...q, u: q.u + 121, v: q.v + 58 * s })), 76, 82)];
+}), [0, 0, 28], [0, 0, 12], [["bonnet", 0.45], ["front end", 0.5]]);
+// the radiator stands just behind the front end's rear face (x 162), so it lifts straight up once the bonnet is off
+const rx = (z) => 160.3 - 4 * (z - 24) / 35;
+part("radiator", 0, [W(SLAB([[R(152, 160, pm(30), 3), 24], [R(148, 156, pm(30), 3), 59]]), M("nf lo", [0.97, 0, 0.26],
+  on(rrect(-26, 28, 26, 52, 2), (u, v) => [rx(v), u, v]), [[[rx(54), -28, 54], [rx(54), 28, 54]], false]))],
+[0, 0, 33], [0, 0, 33], [["bonnet", 0.5]]);
+
+// the cabin: two buckets with integrated headrests, a round three-spoke wheel on the right
+for (const s of sides) {
+  const Y = (a, b) => yy(s, a, b), at = (pts) => mir(s, pts);
+  part(s > 0 ? "driver seat" : "passenger seat", 0, [
+    SLAB([[R(-46, 5, Y(12.5, 67), 8), 16], [R(-44, 3, Y(14, 65), 8), (x) => 30 + 0.149 * (x + 44)]],
+      [at([[-42, 25, 30.5], [0, 25, 36.5], [0, 53, 36.5], [-42, 53, 30.5]]), [0, 0, 1]]),
+    SLAB([[R(-62, -46, Y(11, 67), 7), 28], [R(-86, -74, Y(13, 65), 7), 92]],
+      [at([[-50, 24, 34], [-73, 26, 86], [-73, 52, 86], [-50, 54, 34]]), [0.92, 0, 0.39]]),
+    SLAB([[R(-86, -77, Y(28, 50), 4), 92], [R(-89, -79, Y(25, 53), 6), 114]]),
+  ], [0, 0, 10], [0, 0, 15], [["roof", 0.45]]);
+}
+const SN = norm([-0.93, 0, 0.37]), SC = [4, 39, 70], rim = DRUM(add(SC, mul(SN, -1.5)), add(SC, mul(SN, 1.5)), 18.5, 18.5, [15]);
+const spoke = (pts) => [pts.map(([u, v]) => rim.at(1, u, v)), true, 1];
+part("steering wheel", 0, [W(rim, M("nf lo", SN, on(rrect(-8.25, -6.5, 8.25, 6.5, 4), (u, v) => rim.at(1, u, v)),
+  spoke([[8.25, -3], [15, -3], [15, 3], [8.25, 3]]), spoke([[-8.25, -3], [-15, -3], [-15, 3], [-8.25, 3]]),
+  spoke([[-1.75, 6.5], [1.75, 6.5], [1.75, 15], [-1.75, 15]]))), DRUM([14, 39, 72.3], [30, 39, 79], 3, 3, "line")],
+[10, 0, 22], [8, 0, 16], [["roof", 0.45]]);
+
+// the drivetrain, down the tunnel to the tail
+// the bell's boxes are a staircase at least as wide as its true radius, 9.5 + 12 (x + 7) / 72, in each slice
+const bellBx = [[30, 65, 21.5], [10, 30, 16], [5, 10, 12.4], [-7, 5, 11.5]].map(([a, b, r]) => [a, b, -r, r, 35 - r, 35 + r]);
+part("gearbox", 0, [PR(R(6, 45, pm(13), 4), 10, 16),
+  Object.assign(DRUM([-7, 0, 35], [65, 0, 35], 9.5, 21.5, ["ring", 49 / 72]), { join: true, bx: bellBx })], [0, 0, 12], [0, 0, 14]);
+// the tube in two lengths either side of its centre bearing, so each pair is split by a plane
+part("propshaft", 0, [DRUM([-8, 0, 33], [-48, 0, 33], 3.75, 3.75, ["ring", 0.3]), PR(R(-58, -48, pm(7), 2), 28, 38),
+  DRUM([-58, 0, 33], [-94, 0, 33], 3.75, 3.75, "line")], [0, 0, 22], [0, 0, 20]);
+part("active diff", 0, [
+  W(PR(R(-140, -110, pm(16.5), 14, 14), 20, 48), M("nf lo", [-1, 0, 0], on(circ(10, 24), (u, v) => [-140, u, 34 + v])),
+  ...sides.map((s) => M("nf lo", [0, s, 0], on(circ(5, 16), xz(-125, 16.5 * s, 34))))),
+DRUM([-110, 0, 34], [-96, 0, 34], 5.5, 4.5, "cap")], [0, 0, 18], [0, 0, 28], [["hatch", 0.45]]);
+// the muffler sits ahead of the diffuser and the tips below the bumper beside it, so the bumper lifts clear of both
+part("exhaust", 0, [DRUM([-173.5, -50, 35.5], [-173.5, 50, 35.5], 1, 1, "cap", rrect(-12.5, -8.5, 12.5, 8.5, 8, 6)),
+  ...sides.map((s) => DRUM([-208, 47 * s, 19], [-222, 47 * s, 19], 5.1, 5.1, [4]))], [-12, 0, 0], [-10, 0, 0], [["rear bumper", 0.85]]);
+// the corners: big 19-inch twin-spoke wheels, a four-pot Brembo at the front, a plain fist at the rear. Each tyre is an
+// outer slice (outboard of sp, sorted against its wall or pod by their face hw) and an inner slice (layer 0.5: behind the
+// body, before its brake); a brake sorts against the walls, pods and inner slices by the side it is seen from (paint)
+for (const [f, x, z, RW, wd, yc, yd, rd, th, r0, r1, phi, y0, y1, sp, hw] of [
+  [1, 123.5, 33, 33, 25.5, 79.7, 78.1, 17.4, 3.6, 11.5, 21, 120, 71.5, 85.5, 90, 90],
+  [0, -123.5, 33.75, 33.75, 27.5, 83.25, 82.45, 17.25, 2.4, 10, 19.5, 132, 76.75, 87.75, 92, 99]]) {
+  for (const s of sides) {
+    const k = (f ? "f" : "r") + (s > 0 ? "r" : "l"), yi = s * (yc - wd / 2), yo = s * (yc + wd / 2), n = [0, s, 0];
+    const tyre = Object.assign(DRUM([x, s * sp, z], [x, yo, z], RW, RW, [25.9]), { hw }), face1 = (u, v) => tyre.at(1, u, v);
+    const VEE = [[7.5, -7], [24, -11], [24, -4.5], [16.5, 0], [24, 4.5], [24, 11], [7.5, 7]];
+    const vee = (t) => [VEE.map(([r, d]) => face1(...pol(r, t + d))), true, 0.6];
+    W(tyre, M("nf", n, on(circ(24, 48), face1)), M("nf lo", n, on(circ(7.5, 20), face1), ...[0, 1, 2, 3, 4].map((j) => vee(90 + 72 * j))));
+    const inner = Object.assign(DRUM([x, yi, z], [x, s * sp, z], RW, RW, [25.9]), { layer: 0.5, hw, iw: f && 70 });
+    part("wheel " + k, 2, [tyre, inner], [0, 30 * s, 0], [0, 30 * s, 0], null,
+      (P, o) => (Math.abs(yi + o[1]) > hw ? seg(P(x, s * hw, z), P(x, yi + o[1], z)) : ""));
+    const disc = W(DRUM([x, s * (yd - th / 2), z], [x, s * (yd + th / 2), z], rd, rd, [11]),
+      M("nf lo", n, on(circ(8.2, 24), xz(x, s * (yd + th / 2), z))));
+    // layer 1.5: under its own tyre, but over the wall it leaves through while it bursts out of the arch
+    Object.assign(disc, { hw, iw: f && 70, brake: n, layer: 1.5 });
+    // the caliper as two halves, one each side of the disc: the disc plane orders them exactly (subOrder)
+    const calHalf = (ya, yb, yf, sg) => {
+      const c = { join: true, pts: [] };
+      for (const r of [r0, r1]) for (let j = 0; j < 5; j++) {
+        for (const y of [ya, yb]) c.pts.push(xz(x, s * y, z)(...pol(r, phi + (f ? 25 : 18) * j)));
+      }
+      c.cr = (v) => (dot(v, n) * sg > 0 ? [[arc(x, yf * s, z, f ? 19.5 : 17, f ? 135 : 140, f ? 205 : 196, 10), false]] : []);
+      return c;
+    };
+    const calIn = calHalf(y0, yd - th / 2 - 0.2, y0, -1), cal = calHalf(yd + th / 2 + 0.2, y1, y1, 1);
+    const lobe = (d) => on(circ(3.2, 12), xz(x + pol(15.5, d)[0], s * y1, z + pol(15.5, d)[1]));
+    if (f) W(cal, M("nf lo", n, lobe(150), lobe(190)));
+    // up and out, so a disc and its caliper stand clear above the exploded tyre from every three-quarter view
+    part((f ? "brembo " : "brake ") + k, 0, [disc, calIn, cal], [0, 14 * s, 20], [0, 14 * s, 20], [["wheel " + k, 0.6]]);
+  }
+}
+const IDX = Object.fromEntries(PARTS.map((p, i) => [p.name, i]));
+PARTS.forEach((p) => p.gates && (p.gates = p.gates.map(([g, c]) => [IDX[g], c])));
+/** A solid's clearance boxes: its own staircase, or the box round its points. */
+const aabb = (p) => [0, 1, 2].flatMap((j) => [Math.min(...p.map((q) => q[j])), Math.max(...p.map((q) => q[j]))]);
+for (const p of PARTS) for (const s of p.solids) s.bx = s.bx || [aabb(s.pts)];
+/** Paint items: one per solid, except that a caliper joins its disc and the bell its pan, as in the box model. */
+const ITEMS = [];
+PARTS.forEach((p, i) => p.solids.forEach((s) => (s.join ? ITEMS.at(-1).ss.push(s)
+  : ITEMS.push({ part: i, k: ITEMS.filter((it) => it.part === i).length, layer: s.layer ?? p.layer, ss: [s] }))));
+/** The order of an item's solids: a brake's caliper halves either side of its disc, the half on the seen side last. */
+const subOrder = (it, v) => (it.ss[0].brake ? (dot(v, it.ss[0].brake) > 0 ? [1, 0, 2] : [2, 0, 1]) : it.ss.map((_, j) => j));
+/** Each part's rest centre, the mean of its boxes' centres: where the stagger measures from. */
+const CEN = PARTS.map((p) => { const b = p.solids.flatMap((s) => s.bx);
+  return [0, 1, 2].map((j) => b.reduce((a, q) => a + (q[2 * j] + q[2 * j + 1]) / 2 / b.length, 0)); });
+
+// ---- pure, for the harness too: offsets, points, sort items, the paint order and the fitted camera ----
+/** Every part's offset at spread e: B + D·s times its progress; a gated part follows its covers, min over its gates. */
+function offsets(e, k) {
+  const s = e / 60, f = [];
+  const gate = ([j, c]) => clamp((fr(j) - c) / (1 - c), 0, 1);
+  const fr = (i) => f[i] ?? (f[i] = PARTS[i].gates ? Math.min(...PARTS[i].gates.map(gate)) : k(i));
+  return PARTS.map((p, i) => p.B.map((b, j) => (b + p.D[j] * s) * fr(i)));
+}
+const solidPts = (i, o) => PARTS[i].solids.map((s) => s.pts.map((q) => add(q, o)));
+const mvb = (b, o) => [b[0] + o[0], b[1] + o[0], b[2] + o[1], b[3] + o[1], b[4] + o[2], b[5] + o[2]];
+/** A tyre slice's |y| range against the body shell: an outer slice not yet clear of its wall's or pod's face H is a sheet just
+ *  outside it; an inner slice straddling H is its outboard part, and wholly inside, a sheet at the wall's inner face I. */
+function cut(b, H, I) {
+  const s = b[2] + b[3] > 0 ? 1 : -1, lo = s > 0 ? b[2] : -b[3], hi = s > 0 ? b[3] : -b[2];
+  const [l, h] = I === undefined ? (lo < H ? [H, Math.max(hi, H + 0.1)] : [lo, hi])
+    : lo < H && hi > H ? [H, hi] : hi <= H && lo < I ? [lo, Math.min(hi, I - 0.1)] : [lo, hi];
+  return s > 0 ? [b[0], b[1], l, h, b[4], b[5]] : [b[0], b[1], -h, -l, b[4], b[5]];
+}
+/** The sort items at offsets o: each solid's boxes moved (raw), and bs, with a tyre slice's boxes cut. The cut boxes sort a
+ *  wheel against the body shell only; the raw ones against everything else. */
+const sortItems = (o) => ITEMS.map((it) => { const raw = it.ss.flatMap((s) => s.bx).map((b) => mvb(b, o[it.part])), { hw, iw } = it.ss[0];
+  return { ...it, raw, bs: hw ? raw.map((b) => cut(b, hw, iw)) : raw }; });
+const DECL = new Set(["front end<bonnet", "body shell<bonnet", "body shell<front end", "body shell<hatch", "rear bumper<hatch"]);
+const within = (a, b) => [0, 2, 4].every((j) => a[j] >= b[j] - 0.5 && a[j + 1] <= b[j + 1] + 0.5);
+/** Which side of an axis plane: 1 when a is behind b, -1 when in front, 0 when no axis plane separates them. */
+const plane = (a, b, sn, cs) => (a[1] <= b[0] ? Math.sign(sn) : b[1] <= a[0] ? -Math.sign(sn) : a[3] <= b[2] ? Math.sign(cs)
+  : b[3] <= a[2] ? -Math.sign(cs) : a[5] <= b[4] ? 1 : b[5] <= a[4] ? -1 : 0);
+/** A box's eight corners, and its screen hexagon at unit scale for the azimuth's sin and cos. */
+const corners = (b) => [b[0], b[1]].flatMap((x) => [b[2], b[3]].flatMap((y) => [[x, y, b[4]], [x, y, b[5]]]));
+const hex = (b, sn, cs) => hull(corners(b).map(([x, y, z]) => [x * cs - y * sn, (x * sn + y * cs) * K - z * ZF]));
+/** Whether two convex polygons overlap: no edge of either separates them. */
+function sat(A, B) {
+  for (const H of [A, B]) for (let i = 0; i < H.length; i++) {
+    const p = H[i], q = H[(i + 1) % H.length], nx = q[1] - p[1], ny = p[0] - q[0], m = [1e9, -1e9, 1e9, -1e9];
+    for (const r of A) { const d = r[0] * nx + r[1] * ny; m[0] = Math.min(m[0], d); m[1] = Math.max(m[1], d); }
+    for (const r of B) { const d = r[0] * nx + r[1] * ny; m[2] = Math.min(m[2], d); m[3] = Math.max(m[3], d); }
+    if (m[1] <= m[2] + 1e-6 || m[3] <= m[0] + 1e-6) return false;
+  }
+  return true;
+}
+/** Turntable's paint order, generalised: an inner item wholly inside one shell is glued just before it; the rest are
+ *  ordered pairwise by axis planes where their screen hexagons overlap, then sorted farthest-free-first. */
+function paint(L, az) {
+  const sn = Math.sin(rad(az)), cs = Math.cos(rad(az)), n = L.length;
+  const host = L.map((q) => (q.layer ? -1 : L.findIndex((h) => h.layer === 1 && q.bs.every((a) => h.bs.some((b) => within(a, b))))));
+  const dep = L.map((q) => q.raw.reduce((d, b) => d + (b[0] + b[1]) * sn + (b[2] + b[3]) * cs + (b[4] + b[5]) * 0.01, 0) / q.raw.length);
+  const hx = L.map((q) => q.raw.map((b) => hex(b, sn, cs))), bb = hx.map((hs) => aabb(hs.flat().map((p) => [...p, 0])));
+  const next = L.map(() => []), wait = L.map(() => 0);
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+    const a = bb[i], b = bb[j], C = (L[i].ss[0].hw && L[j].ss[0].face) || (L[j].ss[0].hw && L[i].ss[0].face) ? "bs" : "raw";
+    if (host[i] >= 0 || host[j] >= 0 || a[1] <= b[0] || b[1] <= a[0] || a[3] <= b[2] || b[3] <= a[2]) continue;
+    let v = null, bad = false, any = false;
+    L[i][C].forEach((a, x) => L[j][C].forEach((b, y) => { // overlap on the true boxes; a tyre's cut ones only against its wall or pod
+      if (!sat(hx[i][x], hx[j][y])) return;
+      const w = plane(a, b, sn, cs); any = true;
+      if (!w || (v !== null && v !== w)) bad = true; else v = w;
+    }));
+    if (!any) continue;
+    const A = L[i], B = L[j], nm = (q) => PARTS[q.part].name;
+    // a brake against a wall, a pod or a tyre's inner slice: while its disc is within the other's y range (it sits in it,
+    // or is passing out through its face), over it seen from its own side and under it from the other; else by y
+    const sh = (q) => q.ss[0].face || q.layer === 0.5, first = (q, h) => {
+      const c = (q.raw[0][2] + q.raw[0][3]) / 2, b = h.raw[0];
+      return c > b[2] && c < b[3] ? cs * q.ss[0].brake[1] <= 0 : cs * (c - (b[2] + b[3]) / 2) < 0;
+    };
+    const br = A.ss[0].brake && sh(B) ? first(A, B) : B.ss[0].brake && sh(A) ? !first(B, A) : null;
+    const ib = !bad ? v > 0 : br !== null ? br : A.part === B.part ? A.k < B.k : A.layer !== B.layer ? A.layer < B.layer
+      : DECL.has(nm(A) + "<" + nm(B)) ? true : DECL.has(nm(B) + "<" + nm(A)) ? false : dep[i] < dep[j];
+    if (ib) { next[i].push(j); wait[j]++; } else { next[j].push(i); wait[i]++; }
+  }
+  const done = L.map((_, i) => host[i] >= 0), order = [];
+  let forced = 0, left = null;
+  for (let c = done.filter(Boolean).length; c < n; c++) {
+    let pick = -1;
+    for (let pass = 0; pass < 2 && pick < 0; pass++) {
+      for (let i = 0; i < n; i++) if (!done[i] && (pass || !wait[i]) && (pick < 0 || dep[i] < dep[pick])) pick = i;
+      if (pass && pick >= 0) { forced++; left = left || L.map((_, i) => i).filter((i) => !done[i]); }
+    }
+    done[pick] = true;
+    L.forEach((_, g) => host[g] === pick && order.push(g));
+    order.push(pick);
+    for (const j of next[pick]) wait[j]--;
+  }
+  return { order, forced, next, left };
+}
+/** The camera's centre: every clearance box at rest and fully apart at the far end, and the platter's rim, swept round the
+ *  z axis in 15° steps, so the drawing's union over all azimuths is centred and the centre never wanders as it turns. */
+const FIT = (() => {
+  const C = Cam(HOME, K, S), far = offsets(RANGE[2], () => 1), pts = [];
+  for (const it of ITEMS) for (const b of it.ss.flatMap((s) => s.bx)) {
+    for (const o of [Z3, far[it.part]]) pts.push(...corners(b).map((c) => add(c, o)));
+  }
+  for (let d = 0; d < 360; d += 15) pts.push([230 * Math.cos(rad(d)), 230 * Math.sin(rad(d)), -4]);
+  const swept = ([x, y, z]) => Array.from({ length: 24 },
+    (_, j) => [...pol(Math.hypot(x, y), (Math.atan2(y, x) * 180) / Math.PI + 15 * j), z]);
+  fit(C, pts.flatMap(swept), 200, 166);
+  return [C.ox, C.oy];
+})();
+const camAt = (az) => { const C = Cam(az, K, S); C.ox = FIT[0]; C.oy = FIT[1]; return proj(C); };
+/** Strokes to one path string under projector Q; fillet radii are world units. */
+const ink = (st, Q) => st.map(([pts, closed, r]) => { const p = pts.map((w) => Q(...w));
+  const q = r ? fillet(p, p.map((_, i) => (Array.isArray(r) ? r[i] : r) * S)) : p;
+  return closed ? poly(q) : open(q); }).join("");
+/** Whether a point is inside a convex polygon: on the same side of all its edges. */
+function inside(p, pg) {
+  const s = pg.map((a, i) => {
+    const b = pg[(i + 1) % pg.length];
+    return Math.sign((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]));
+  });
+  return s.every((v) => v >= 0) || s.every((v) => v <= 0);
+}
+const grow = (h) => { const c = h.reduce((a, p) => [a[0] + p[0] / h.length, a[1] + p[1] / h.length], [0, 0]);
+  return h.map((p) => {
+    const d = Math.hypot(p[0] - c[0], p[1] - c[1]) / GROW || 1;
+    return [p[0] + (p[0] - c[0]) / d, p[1] + (p[1] - c[1]) / d];
+  });
+};
+
+function mount({ stage, svg, read }, value) {
+  const bag = disposer(), C = Cam(HOME, K, S), E = spring(clamp(value, RANGE[0], RANGE[2]), { eps: 0.05 }), TW = PARTS.map(() => tween(0));
+  C.ox = FIT[0]; C.oy = FIT[1];
+  // the platter first, then one group per solid: its guide, silhouette, crease and marks
+  const g = mk("g", {}, svg), plat = solid(g), ticks = mk("path", { class: "nf lo" }, plat.g), index = flatDot(plat.g, C, 2.5, "dot off");
+  const PLAT = circ(230, 96), PLIN = circ(226.5, 96), LAMPS = { head: [], tail: [] };
+  const els = ITEMS.map((it) => {
+    const gi = mk("g", {}, g), sols = it.ss.map((s) => {
+      const el = solid(gi), mEl = (s.mk || []).map(([cls]) => mk("path", { class: LAMPS[cls] ? "nf lo" : cls }, el.g));
+      mEl.forEach((e, j) => LAMPS[s.mk[j][0]]?.push(e));
+      return { s, el, mEl };
+    });
+    const gd = it.k === 0 && PARTS[it.part].guide ? mk("path", { class: "nf dash" }, sols[0].el.g) : null;
+    if (gd) sols[0].el.sil.before(gd);
+    return { ...it, g: gi, sols, gd, drawn: "" };
+  });
+  // the turntable: its angle a (°), speed w (°/s), mode, and the angle it will stop at, tgt
+  let a = HOME, w = AMB, mode = "amb", tgt = HOME, wTw = tween(AMB), lastFlick = -1e9, okey = "", side = "head", lit = "";
+  let isOpen = false, cur = -1, lastP = null, hist = [], cache = null, ckey = "", w0 = null, ORD = {};
+  function spin(dt, now) {
+    if (reducedMotion() && mode === "amb") { a = HOME; w = 0; return false; }
+    const n = Math.max(1, Math.ceil(dt * 240)), h = dt / n;
+    for (let i = 0; i < n; i++) {
+      if (mode === "amb") { w = tval(wTw, now); a += w * h; }
+      else if (mode === "brake" || mode === "coast") {
+        w *= Math.exp(-h / (mode === "brake" ? BRAKE : COAST)); a += w * h;
+        if (Math.abs(w) < 45 && now - lastFlick > 90) mode = "settle";
+      } else if (mode === "settle") { w += (-90 * (a - tgt) - 16 * w) * h; a += w * h; }
+    }
+    if (mode === "settle" && Math.abs(a - tgt) < 0.02 && Math.abs(w) < 0.3) { a = tgt; w = 0; mode = "hold"; }
+    return mode !== "hold";
+  }
+  /** The lamps that face the viewer are the rest mark, with hysteresis at the side views; a chosen part takes the bright. */
+  function lamps() {
+    const sn = Math.sin(rad(a)), k = (side = sn >= 0.17 ? "head" : sn <= -0.17 ? "tail" : side) + cur;
+    if (k === lit) return; else lit = k;
+    for (const sd in LAMPS) for (const e of LAMPS[sd]) {
+      const on = cur < 0 && sd === side;
+      e.classList.toggle("hi", on);
+      e.classList.toggle("lo", !on);
+    }
+  }
+  /** Redraws what changed: a solid when the angle or its offset did; the order when any did. */
+  function draw(now) {
+    const aq = mode === "amb" ? Math.round(a * 4) / 4 : a; // the ambient turn redraws every 0.25°, not every frame
+    const P = camAt(aq), v = V(aq), o = offsets(E.x, (i) => tval(TW[i], now)), ak = r2(aq * 10) + "|";
+    if (plat.drawn !== ak && (plat.drawn = ak)) {
+      put(plat, prism(P, (q) => q.nu * v[0] + q.nv * v[1] >= 0, PLAT, PLIN, -4, 0));
+      ticks.setAttribute("d", Array.from({ length: 24 }, (_, j) => seg(P(...pol(216, 15 * j), 0), P(...pol(223, 15 * j), 0))).join(""));
+      place(index, P(222, 0, 0));
+    }
+    for (const it of els) {
+      const oi = o[it.part], key = ak + oi.map(r2).join();
+      if (key === it.drawn) continue; else it.drawn = key;
+      const Q = (x, y, z) => P(x + oi[0], y + oi[1], z + oi[2]);
+      for (const { s, el, mEl } of it.sols) {
+        el.sil.setAttribute("d", poly(hull(s.pts.map((q) => Q(...q)))));
+        el.cr.setAttribute("d", ink(s.cr(v), Q));
+        mEl.forEach((e, j) => e.setAttribute("d", dot(v, s.mk[j][1]) > 0 ? ink(s.mk[j][2], Q) : ""));
+      }
+      if (it.gd) it.gd.setAttribute("d", Math.hypot(...oi) > 1 ? PARTS[it.part].guide(P, oi) : "");
+    }
+    // turning at rest, the order is solved once per whole degree and kept; otherwise whenever the angle or an offset changed
+    const still = mode === "amb" && o.every((q) => !q.some(Boolean));
+    const k = still ? ((Math.round(aq) % 360) + 360) % 360 : ak + o.flat().map(r2).join();
+    if (k !== okey) {
+      okey = k;
+      let prev = plat.g;
+      const order = still ? (ORD[k] ??= paint(sortItems(o), k).order) : paint(sortItems(o), aq).order;
+      for (const i of order) { const gi = els[i].g; if (prev.nextSibling !== gi) prev.after(gi); prev = gi; }
+      for (const it of els) if (it.ss[0].brake) {
+        const gs = subOrder(it, v).map((j) => it.sols[j].el.g);
+        if (gs.some((e, j) => j && gs[j - 1].nextSibling !== e)) gs.forEach((e) => it.g.append(e));
+      }
+    }
+    lamps();
+    return PARTS.some((p, i) => !p.gates && !tdone(TW[i], now));
+  }
+  const loop = register(stage, (dt, now) => { const m = spin(dt, now), e = stepS(E, dt); return draw(now) || m || e; });
+  bag.add(loop.unregister);
+  // hit areas, static per (stop angle, slider target): rest hulls, target hulls, their orders, and one grown hull to stay in
+  function hits() {
+    const az = isOpen ? tgt : Math.round(tgt), key = r2(az) + "|" + E.t; // closed, it only gates entry: whole degrees will do
+    if (key === ckey) return cache; else ckey = key;
+    const P = camAt(az), O = P(0, 0, 0), o1 = offsets(E.t, () => 1);
+    const rest = ITEMS.map((it) => hull(it.ss.flatMap((s) => s.pts).map((q) => P(...q))));
+    const tg = rest.map((h, i) => { const d = P(...o1[ITEMS[i].part]); return h.map((q) => [q[0] + d[0] - O[0], q[1] + d[1] - O[1]]); });
+    const foot = hull(rest.flat());
+    return (cache = { rest, tg, foot, zone: hull(grow(hull(foot.concat(tg.flat())))),
+      ro: paint(sortItems(offsets(E.t, () => 0)), az).order, to: paint(sortItems(o1), az).order, P, o1 });
+  }
+  /** The part of the frontmost solid whose hull holds the point; else -1. */
+  const pick = (p, hs, ord) => {
+    for (let i = ord.length - 1; i >= 0; i--) if (inside(p, hs[ord[i]])) return ITEMS[ord[i]].part;
+    return -1;
+  };
+  /** The part whose centre, at rest (f 0) or apart (f 1), is nearest the point. */
+  const near = (p, f) => { const c = hits(); let b = 0, d = 1e9;
+    CEN.forEach((q, i) => {
+      const s = c.P(...add(q, mul(c.o1[i], f))), e = Math.hypot(s[0] - p[0], s[1] - p[1]);
+      if (e < d) { d = e; b = i; }
+    });
+    return b; };
+  function light(k) {
+    cur = k;
+    els.forEach((it) => it.sols.forEach(({ el }) => el.sil.classList.toggle("hi", it.part === k)));
+    lamps();
+    read.textContent = k >= 0 ? PARTS[k].name : isOpen ? "apart" : "rest";
+  }
+  /** Apart or together, each own tween delayed by its distance from part k; a gated part rides its covers'. */
+  function burst(on, k) {
+    const now = performance.now(), d = (i) => Math.round(Math.hypot(...sub(CEN[i], CEN[k])) / UNIT) * STEP;
+    isOpen = on; PARTS.forEach((p, i) => p.gates || tset(TW[i], on ? 1 : 0, now, d(i))); loop.wake();
+  }
+  /** Back to the ambient turn: the speed eases from whatever it is to AMB. */
+  function resume() {
+    if (reducedMotion()) { a = HOME; w = 0; } else { wTw = tween(w); tset(wTw, AMB, performance.now(), 0); }
+    mode = "amb";
+    loop.wake();
+  }
+  function move(p, e) {
+    const now = performance.now(), prev = hist.at(-1);
+    hist = hist.filter((h) => now - h[2] <= 60).concat([[p[0], p[1], now]]);
+    const [x0, y0, t0] = hist[0], dt = (now - t0) / 1000, dx = p[0] - x0, vx = dt > 0 ? dx / dt : 0;
+    lastP = p;
+    const flick = dt >= 0.0155 && Math.abs(dx) >= 12 && Math.abs(vx) >= FLICK && Math.abs(dx) >= 2 * Math.abs(p[1] - y0);
+    if (isOpen && e?.pointerType !== "ghost" && flick) {
+      if (reducedMotion()) { a -= (p[0] - (prev ? prev[0] : p[0])) * GAIN; tgt = a; } // a flick turns it by hand, no coast
+      else { w0 ??= w; w = clamp(lerp(w0, -vx * GAIN, 0.5), -WMAX, WMAX); mode = "coast"; tgt = a + w * COAST; lastFlick = now; }
+      return loop.wake();
+    }
+    w0 = null; // one blend per sweep: every flick sample of it blends from the speed the sweep began at
+    if (!isOpen) {
+      tgt = a + w * BRAKE;
+      const c = hits();
+      if (!inside(p, c.foot)) return;
+      mode = reducedMotion() ? "hold" : "brake"; // under reduced motion it never turns on its own
+      const k = pick(p, c.rest, c.ro);
+      burst(true, k >= 0 ? k : near(p, 0));
+    } else if (!inside(p, hits().zone)) { burst(false, cur >= 0 ? cur : near(p, 1)); resume(); return light(-1); }
+    light(pick(p, hits().tg, hits().to));
+  }
+  const leave = () => {
+    if (isOpen) burst(false, cur >= 0 ? cur : lastP ? near(lastP, 1) : 0);
+    hist = []; lastP = w0 = null;
+    resume();
+    light(-1);
+  };
+  bag.add(pointer(stage, { move, leave }));
+  light(-1);
+  bag.add(() => svg.replaceChildren());
+  return { destroy: bag.dispose,
+    set: (v) => { E.t = clamp(v, RANGE[0], RANGE[2]); lastP && isOpen && light(pick(lastP, hits().tg, hits().to)); loop.wake(); } };
+}
+
+hairline({
+  name: "supra",
+  means: "A GR Supra on a showroom turntable that bursts into its parts under the pointer; flick across it to spin the exploded car.",
+  rules: [1, 2, 6, 7],
+  range: [42, 60, 75],
+  // from supra-look.mjs --tour: the axis at z 60 and z 185; stop 3 is the deepest point picking the driver seat (the axis at
+  // z 110 picks the hidden gearbox), stop 4 the exploded wheel fr's hub
+  tour: [[200, 183], [200, 103], [139, 160], [233, 271], null],
+  mount,
+});
+</script>
+</body>
+</html>
